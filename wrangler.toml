@@ -1,16 +1,13 @@
-# Cloudflare Pages + Functions configuration for 25-survey-app.
-# Replace the placeholder database_id after creating your D1 database.
-# Add secrets with:
-#   wrangler pages secret put EXPORT_TOKEN
-#   wrangler pages secret put IP_HASH_SECRET
-# Optional browser CORS allowlist:
-#   ALLOWED_ORIGINS=https://example.com,https://admin.example.com
-
-name = "25-survey-app"
+name = "survey-app"
+main = "src/index.js"
 compatibility_date = "2026-06-17"
-pages_build_output_dir = "./public"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"
 database_name = "25-survey-app-db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+database_id = "eeca209b-e57d-45d7-a29c-ec2ef24e57dc"

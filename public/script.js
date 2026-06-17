@@ -18,7 +18,7 @@
     // Storage key for duplicate prevention
     const STORAGE_KEY = 'survey_submitted_sa_economy';
 
-    // Pages Function endpoint
+    // Worker API endpoint
     const API_SUBMIT_URL = '/submit';
     const COMMENT_MAX_LENGTH = 500;
 
