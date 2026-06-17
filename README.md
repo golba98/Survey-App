@@ -78,8 +78,8 @@ Copy the real database ID from the command output and replace `YOUR_D1_DATABASE_
 ### 4. Set required secrets
 
 ```bash
-npx wrangler pages secret put EXPORT_TOKEN
-npx wrangler pages secret put IP_HASH_SECRET
+npx wrangler pages secret put EXPORT_TOKEN --project-name survey-app
+npx wrangler pages secret put IP_HASH_SECRET --project-name survey-app
 ```
 
 Required secrets:
@@ -126,21 +126,45 @@ If you already created a D1 database with the older schema, the simplest path is
 
 ## Cloudflare Pages Deployment
 
+This app is a Cloudflare Pages project with Pages Functions and a D1 binding. It is not a standalone Worker project.
+
 Deploy the project with:
 
 ```bash
 npm run deploy
 ```
 
-That command publishes the `public/` directory and the `functions/` directory together as a Pages project named `25-survey-app`.
+That command publishes the `public/` directory and the `functions/` directory together as a manual Pages deployment for the `survey-app` project.
 
-If you deploy through the Cloudflare dashboard instead:
+For a Git-connected Cloudflare Pages project, do not put `npx wrangler pages deploy ...` into the Cloudflare dashboard deploy command. That command is only for manual deploys from the local terminal.
 
-- Build command: none
-- Output directory: `public`
-- Ensure the repo also includes the `functions/` directory
-- Add the same secrets in the Pages project settings
-- Add the same D1 binding named `DB`
+Cloudflare dashboard settings:
+
+- Project type: Pages
+- Project name: `survey-app`
+- Framework preset: None / Static HTML
+- Build command: leave empty
+- Deploy command: leave empty
+- Build output directory: `public`
+- Root directory: `/`
+
+Dashboard fix steps:
+
+1. Go to `Workers & Pages → survey-app → Settings → Build & deployments`
+2. Set `Build command` to empty
+3. Set `Deploy command` to empty
+4. Set `Build output directory` to `public`
+5. Set `Root directory` to `/`
+6. Retry the build
+
+D1 binding required in the Pages dashboard:
+
+- Variable name: `DB`
+- Database: `25-survey-app-db`
+
+If the binding is missing, add it here:
+
+`Workers & Pages → survey-app → Settings → Bindings → D1 database binding`
 
 ## Required Secrets
 
@@ -171,6 +195,12 @@ Route:
 
 ```text
 GET /export
+```
+
+Example URL:
+
+```text
+/export?format=json&token=YOUR_TOKEN
 ```
 
 Query parameters:
@@ -224,10 +254,11 @@ curl "https://your-project.pages.dev/export?format=csv&start=2026-01-01&end=2026
 
 ## Manual Setup Still Required
 
-- Replace the placeholder D1 database ID in `wrangler.toml`
-- Create the `EXPORT_TOKEN` secret
-- Create the `IP_HASH_SECRET` secret
-- Log in to Cloudflare before running database or deploy commands
+- In the Cloudflare dashboard, keep the Pages project name as `survey-app`
+- Create the `EXPORT_TOKEN` secret on the `survey-app` Pages project
+- Create the `IP_HASH_SECRET` secret on the `survey-app` Pages project
+- Confirm the D1 binding is present as `DB`
+- Log in to Cloudflare before running database or manual deploy commands
 
 ## Local Security Setup
 
@@ -244,8 +275,8 @@ EOF
 Set production secrets with:
 
 ```bash
-npx wrangler pages secret put EXPORT_TOKEN
-npx wrangler pages secret put IP_HASH_SECRET
+npx wrangler pages secret put EXPORT_TOKEN --project-name survey-app
+npx wrangler pages secret put IP_HASH_SECRET --project-name survey-app
 ```
 
 Run locally with:
