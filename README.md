@@ -86,6 +86,7 @@ Required secrets:
 
 - `EXPORT_TOKEN`: required to access `/export`
 - `IP_HASH_SECRET`: used to salt the stored IP hash for duplicate prevention
+- `ALLOWED_ORIGINS` (optional): comma-separated browser origins if you need to allow cross-origin requests beyond same-origin and local development
 
 ### 5. Apply the schema
 
@@ -121,6 +122,8 @@ npm run db:apply
 
 This creates the `survey_responses` table and indexes used for timestamp filtering and duplicate prevention.
 
+If you already created a D1 database with the older schema, the simplest path is to create a fresh D1 database and apply the updated `schema.sql` before using the hardened handlers.
+
 ## Cloudflare Pages Deployment
 
 Deploy the project with:
@@ -149,6 +152,18 @@ Do not hardcode secrets in source files.
 - `IP_HASH_SECRET`
   - Used to salt the duplicate-prevention IP hash
   - Must be set in every environment where submissions are accepted
+- `ALLOWED_ORIGINS`
+  - Optional allowlist for browser CORS
+  - Format: comma-separated origins such as `https://example.com,https://admin.example.com`
+
+## Security and Privacy
+
+- No names, phone numbers, emails, exact addresses, or ID numbers are collected
+- Raw IP addresses are never stored; only a salted hash is kept for duplicate and spam protection
+- `/export` requires the `EXPORT_TOKEN` secret and does not expose data publicly
+- D1 queries use prepared statements only
+- Survey data should only be reported in grouped, anonymous form
+- Comments are stored as plain text and are never rendered as HTML
 
 ## Export Endpoint Usage
 
@@ -194,10 +209,18 @@ curl "https://your-project.pages.dev/export?format=csv&start=2026-01-01&end=2026
 - Submit a valid response and confirm the frontend posts to `/submit`
 - Confirm successful submission redirects to `/success.html`
 - Leave required fields blank and confirm validation blocks submission
+- Submit invalid rating values and confirm the server rejects them
+- Submit unknown answer option values and confirm the server rejects them
+- Submit a comment longer than 500 characters and confirm the server rejects it
+- Submit unexpected extra JSON fields and confirm the server rejects them
+- Submit repeated attempts quickly and confirm the throttle responds without breaking normal use
+- Submit twice from the same browser and confirm duplicate protection blocks the second submission
 - Confirm `/export` rejects requests without a valid `token`
+- Confirm `/export` rejects requests with a wrong token
 - Confirm `/export?format=json&token=...` returns JSON
 - Confirm `/export?format=csv&token=...` returns CSV
 - Confirm the D1 binding name is `DB` everywhere
+- Confirm no raw IP is stored in D1
 
 ## Manual Setup Still Required
 
@@ -205,3 +228,37 @@ curl "https://your-project.pages.dev/export?format=csv&start=2026-01-01&end=2026
 - Create the `EXPORT_TOKEN` secret
 - Create the `IP_HASH_SECRET` secret
 - Log in to Cloudflare before running database or deploy commands
+
+## Local Security Setup
+
+For local development, create a `.dev.vars` file that is not committed:
+
+```bash
+cat > .dev.vars <<'EOF'
+EXPORT_TOKEN=replace-with-a-local-export-token
+IP_HASH_SECRET=replace-with-a-local-ip-hash-secret
+ALLOWED_ORIGINS=http://localhost:8788,http://127.0.0.1:8788
+EOF
+```
+
+Set production secrets with:
+
+```bash
+npx wrangler pages secret put EXPORT_TOKEN
+npx wrangler pages secret put IP_HASH_SECRET
+```
+
+Run locally with:
+
+```bash
+npm run dev
+```
+
+Manual local security tests:
+
+```bash
+curl -i "http://localhost:8788/export"
+curl -i "http://localhost:8788/export?token=wrong-token"
+curl -i "http://localhost:8788/export?token=replace-with-a-local-export-token"
+```
+```
