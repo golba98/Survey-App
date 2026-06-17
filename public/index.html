@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: https://ogp.me/ns#">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Anonymous survey about the South African economy for data visualisation project">
+    <meta name="theme-color" content="#000000">
+    <title>Putting the South African Economy Into Perspective - Survey</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Putting the South African Economy Into Perspective">
+    <meta property="og:description" content="Anonymous survey about cost of living, work pressure, and economic challenges in South Africa">
+    <meta property="og:type" content="website">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Putting the South African Economy Into Perspective</h1>
+            <p class="subtitle">Anonymous Student Survey for Data Visualisation Project</p>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main-content" class="main">
+            <!-- Introduction -->
+            <section class="intro-card card">
+                <h2>About This Survey</h2>
+                <p>
+                    This is an anonymous survey for a university data visualisation project.
+                    We are collecting responses from South African students and young adults about
+                    cost of living, work pressure, and daily economic pressures.
+                </p>
+                <p>
+                    <strong>Your responses will only be used in grouped, anonymous form for data analysis.</strong>
+                    No personally identifying information is collected.
+                </p>
+                <p class="time-estimate">Estimated time: 3-5 minutes</p>
+            </section>
+
+            <!-- Privacy Notice -->
+            <section class="privacy-card card">
+                <h2>Privacy Notice</h2>
+                <p>
+                    <strong>This survey is completely anonymous.</strong> Do not enter your name, phone number,
+                    ID number, exact address, email, or any private identifying information.
+                </p>
+                <p>
+                    Responses will only be used for a student data visualisation project and shown in grouped form.
+                </p>
+            </section>
+
+            <!-- Survey Form -->
+            <form id="survey-form" class="survey-form" novalidate>
+                <!-- Question 1: Age Range -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">1</span>
+                        What is your age range?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="age_range" value="18-21" required aria-required="true">
+                            <span class="radio-label">18-21</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="age_range" value="22-25" required aria-required="true">
+                            <span class="radio-label">22-25</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="age_range" value="26-30" required aria-required="true">
+                            <span class="radio-label">26-30</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="age_range" value="31+" required aria-required="true">
+                            <span class="radio-label">31+</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-age_range" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 2: Status -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">2</span>
+                        What is your current status?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="status" value="Student" required aria-required="true">
+                            <span class="radio-label">Student</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="status" value="Employed" required aria-required="true">
+                            <span class="radio-label">Employed</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="status" value="Unemployed" required aria-required="true">
+                            <span class="radio-label">Unemployed</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="status" value="Studying and working" required aria-required="true">
+                            <span class="radio-label">Studying and working</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-status" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 3: Main Monthly Pressure -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">3</span>
+                        What is your main monthly financial pressure?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Food" required aria-required="true">
+                            <span class="radio-label">Food</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Transport" required aria-required="true">
+                            <span class="radio-label">Transport</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Rent" required aria-required="true">
+                            <span class="radio-label">Rent</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Electricity" required aria-required="true">
+                            <span class="radio-label">Electricity</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Data" required aria-required="true">
+                            <span class="radio-label">Data</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Tuition" required aria-required="true">
+                            <span class="radio-label">Tuition</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="main_pressure" value="Debt" required aria-required="true">
+                            <span class="radio-label">Debt</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-main_pressure" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 4: Cost of Living Increase -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">4</span>
+                        Has your cost of living increased in the last year?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="cost_increased" value="Yes" required aria-required="true">
+                            <span class="radio-label">Yes</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="cost_increased" value="No" required aria-required="true">
+                            <span class="radio-label">No</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="cost_increased" value="Not sure" required aria-required="true">
+                            <span class="radio-label">Not sure</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-cost_increased" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 5: What have you cut back on (Checkboxes) -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">5</span>
+                        What have you cut back on?
+                        <span class="required-indicator" aria-label="required">*</span>
+                        <span class="hint">Select all that apply</span>
+                    </legend>
+                    <div class="checkbox-group">
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Eating out">
+                            <span class="checkbox-label">Eating out</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Meat">
+                            <span class="checkbox-label">Meat</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Transport">
+                            <span class="checkbox-label">Transport</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Subscriptions">
+                            <span class="checkbox-label">Subscriptions</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Clothing">
+                            <span class="checkbox-label">Clothing</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Social life">
+                            <span class="checkbox-label">Social life</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="cut_back_on" value="Data">
+                            <span class="checkbox-label">Data</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-cut_back_on" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 6: Work Worry Rating (1-5 scale) -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">6</span>
+                        How worried are you about getting or keeping work?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="rating-scale">
+                        <p class="rating-labels">
+                            <span>Not worried</span>
+                            <span>Extremely worried</span>
+                        </p>
+                        <div class="rating-options">
+                            <label class="rating-option">
+                                <input type="radio" name="work_worry_rating" value="1" required aria-required="true" aria-label="Not worried (1)">
+                                <span class="rating-value">1</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="work_worry_rating" value="2" required aria-required="true" aria-label="Slightly worried (2)">
+                                <span class="rating-value">2</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="work_worry_rating" value="3" required aria-required="true" aria-label="Moderately worried (3)">
+                                <span class="rating-value">3</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="work_worry_rating" value="4" required aria-required="true" aria-label="Very worried (4)">
+                                <span class="rating-value">4</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="work_worry_rating" value="5" required aria-required="true" aria-label="Extremely worried (5)">
+                                <span class="rating-value">5</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="error-message" id="error-work_worry_rating" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 7: Income Keeps Up Rating (1-5 scale) -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">7</span>
+                        Does your income or allowance keep up with rising prices?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="rating-scale">
+                        <p class="rating-labels">
+                            <span>Not at all</span>
+                            <span>Very well</span>
+                        </p>
+                        <div class="rating-options">
+                            <label class="rating-option">
+                                <input type="radio" name="income_keeps_up_rating" value="1" required aria-required="true" aria-label="Not at all (1)">
+                                <span class="rating-value">1</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="income_keeps_up_rating" value="2" required aria-required="true" aria-label="Slightly (2)">
+                                <span class="rating-value">2</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="income_keeps_up_rating" value="3" required aria-required="true" aria-label="Moderately (3)">
+                                <span class="rating-value">3</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="income_keeps_up_rating" value="4" required aria-required="true" aria-label="Well (4)">
+                                <span class="rating-value">4</span>
+                            </label>
+                            <label class="rating-option">
+                                <input type="radio" name="income_keeps_up_rating" value="5" required aria-required="true" aria-label="Very well (5)">
+                                <span class="rating-value">5</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="error-message" id="error-income_keeps_up_rating" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 8: Transport Cost -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">8</span>
+                        What is your approximate monthly transport cost?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="transport_cost" value="R0-R300" required aria-required="true">
+                            <span class="radio-label">R0-R300</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="transport_cost" value="R301-R600" required aria-required="true">
+                            <span class="radio-label">R301-R600</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="transport_cost" value="R601-R1000" required aria-required="true">
+                            <span class="radio-label">R601-R1000</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="transport_cost" value="R1001-R1500" required aria-required="true">
+                            <span class="radio-label">R1001-R1500</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="transport_cost" value="R1500+" required aria-required="true">
+                            <span class="radio-label">R1500+</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-transport_cost" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 9: Food Cost -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">9</span>
+                        What is your approximate monthly food/grocery cost?
+                        <span class="required-indicator" aria-label="required">*</span>
+                    </legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="food_cost" value="R0-R500" required aria-required="true">
+                            <span class="radio-label">R0-R500</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="food_cost" value="R501-R1000" required aria-required="true">
+                            <span class="radio-label">R501-R1000</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="food_cost" value="R1001-R2000" required aria-required="true">
+                            <span class="radio-label">R1001-R2000</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="food_cost" value="R2001-R3000" required aria-required="true">
+                            <span class="radio-label">R2001-R3000</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="food_cost" value="R3000+" required aria-required="true">
+                            <span class="radio-label">R3000+</span>
+                        </label>
+                    </div>
+                    <div class="error-message" id="error-food_cost" role="alert"></div>
+                </fieldset>
+
+                <!-- Question 10: Optional Comment -->
+                <fieldset class="question-card card">
+                    <legend class="question-text">
+                        <span class="question-number">10</span>
+                        What economic issue affects you most?
+                        <span class="optional-indicator">Optional</span>
+                    </legend>
+                    <div class="textarea-container">
+                        <textarea 
+                            name="comment" 
+                            id="comment" 
+                            rows="4"
+                            maxlength="2000"
+                            aria-describedby="comment-help"
+                            placeholder="Share your thoughts..."
+                        ></textarea>
+                        <p class="help-text" id="comment-help">Maximum 2000 characters. Feel free to share any additional thoughts.</p>
+                        <div class="char-count" id="char-count">0 / 2000 characters</div>
+                    </div>
+                    <div class="error-message" id="error-comment" role="alert"></div>
+                </fieldset>
+
+                <!-- Form Controls -->
+                <div class="form-controls card">
+                    <p class="form-summary">
+                        <strong>All questions are required</strong> except the optional comment.
+                        Please review your answers before submitting.
+                    </p>
+                    
+                    <!-- General form error -->
+                    <div class="error-message general-error" id="form-error" role="alert"></div>
+                    
+                    <button 
+                        type="submit" 
+                        id="submit-button"
+                        class="submit-button"
+                        aria-describedby="submit-help"
+                    >
+                        <span class="button-text">Submit Survey</span>
+                        <span class="button-loading" aria-hidden="true">Submitting...</span>
+                    </button>
+                    <p class="submit-help" id="submit-help">
+                        By submitting, you confirm that you have read and understood the privacy notice.
+                    </p>
+                </div>
+            </form>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Data Visualisation Project | South African Economy Survey</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
