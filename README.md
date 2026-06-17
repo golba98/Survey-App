@@ -1,4 +1,4 @@
-# 25-survey-app
+# survey-app
 
 “Putting the South African Economy Into Perspective” is a Cloudflare Pages + Functions + D1 survey app for collecting anonymous grouped responses about cost of living and economic pressure in South Africa.
 
