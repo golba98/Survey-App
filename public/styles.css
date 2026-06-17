@@ -1,0 +1,754 @@
+/* ========================================
+   South African Economy Survey - Styles
+   Black & White Modern Aesthetic
+   ======================================== */
+
+/* CSS Custom Properties (Variables) */
+:root {
+    /* Color Palette - Monochrome Only */
+    --color-black: #000000;
+    --color-white: #ffffff;
+    --color-charcoal: #333333;
+    --color-grey: #666666;
+    --color-light-grey: #cccccc;
+    --color-very-light-grey: #f5f5f5;
+    --color-off-white: #fafafa;
+    
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    --font-size-base: 18px;
+    --font-size-large: 24px;
+    --font-size-xl: 32px;
+    --font-size-heading: 28px;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-bold: 600;
+    --line-height: 1.6;
+    
+    /* Spacing */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 1rem;
+    --spacing-md: 1.5rem;
+    --spacing-lg: 2rem;
+    --spacing-xl: 3rem;
+    --spacing-2xl: 4rem;
+    
+    /* Borders */
+    --border-radius: 8px;
+    --border-radius-lg: 12px;
+    --border-width: 1px;
+    --border-color: var(--color-light-grey);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+    
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.25s ease;
+    --transition-slow: 0.35s ease;
+    
+    /* Layout */
+    --max-width: 800px;
+    --card-max-width: 700px;
+}
+
+/* ========================================
+   Reset & Base Styles
+   ======================================== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height);
+    color: var(--color-charcoal);
+    background-color: var(--color-off-white);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Skip Link for Accessibility */
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-black);
+    color: var(--color-white);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    z-index: 1000;
+    transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+    top: var(--spacing-sm);
+}
+
+/* ========================================
+   Container & Layout
+   ======================================== */
+.container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: var(--spacing-lg) var(--spacing-md);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ========================================
+   Header
+   ======================================== */
+.header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-lg) 0;
+}
+
+.header h1 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-black);
+    line-height: 1.2;
+    margin-bottom: var(--spacing-sm);
+}
+
+.header .subtitle {
+    font-size: var(--font-size-large);
+    color: var(--color-grey);
+    font-weight: var(--font-weight-normal);
+}
+
+/* ========================================
+   Main Content
+   ======================================== */
+.main {
+    flex: 1;
+    width: 100%;
+}
+
+/* ========================================
+   Cards - Base Card Style
+   ======================================== */
+.card {
+    background: var(--color-white);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+    max-width: var(--card-max-width);
+    width: 100%;
+}
+
+/* Different card types have different spacing */
+.intro-card,
+.privacy-card {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.intro-card h2,
+.privacy-card h2 {
+    font-size: var(--font-size-large);
+    color: var(--color-black);
+    margin-bottom: var(--spacing-md);
+    font-weight: var(--font-weight-bold);
+}
+
+.intro-card p,
+.privacy-card p {
+    margin-bottom: var(--spacing-sm);
+    color: var(--color-charcoal);
+}
+
+.intro-card p:last-child,
+.privacy-card p:last-child {
+    margin-bottom: 0;
+}
+
+.privacy-card {
+    border-left: 4px solid var(--color-black);
+}
+
+.privacy-card strong {
+    color: var(--color-black);
+}
+
+.time-estimate {
+    font-style: italic;
+    color: var(--color-grey);
+    font-size: 0.9em;
+    margin-top: var(--spacing-sm);
+}
+
+/* ========================================
+   Form Styles
+   ======================================== */
+.survey-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Question Cards */
+.question-card {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.question-text {
+    font-size: var(--font-size-large);
+    color: var(--color-black);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.question-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--color-black);
+    color: var(--color-white);
+    border-radius: 50%;
+    font-weight: var(--font-weight-bold);
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.required-indicator {
+    color: #d32f2f; /* Red for required fields - accessibility requirement */
+    font-weight: var(--font-weight-bold);
+}
+
+.optional-indicator {
+    color: var(--color-grey);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.hint {
+    font-size: 0.85em;
+    color: var(--color-grey);
+    font-style: italic;
+}
+
+/* ========================================
+   Radio Button Styles
+   ======================================== */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    border: var(--border-width) solid transparent;
+}
+
+.radio-option:hover {
+    background-color: var(--color-very-light-grey);
+}
+
+.radio-option:focus-within {
+    border-color: var(--color-black);
+    outline: 2px solid var(--color-black);
+    outline-offset: 2px;
+}
+
+.radio-option input[type="radio"] {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-light-grey);
+    border-radius: 50%;
+    margin-right: var(--spacing-sm);
+    position: relative;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.radio-option input[type="radio"]:checked {
+    border-color: var(--color-black);
+    background-color: var(--color-black);
+}
+
+.radio-option input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background-color: var(--color-white);
+    border-radius: 50%;
+}
+
+.radio-option input[type="radio"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.radio-label {
+    color: var(--color-charcoal);
+    font-size: 1em;
+}
+
+/* ========================================
+   Checkbox Styles
+   ======================================== */
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.checkbox-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    border: var(--border-width) solid transparent;
+}
+
+.checkbox-option:hover {
+    background-color: var(--color-very-light-grey);
+}
+
+.checkbox-option:focus-within {
+    border-color: var(--color-black);
+    outline: 2px solid var(--color-black);
+    outline-offset: 2px;
+}
+
+.checkbox-option input[type="checkbox"] {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-light-grey);
+    border-radius: 4px;
+    margin-right: var(--spacing-sm);
+    position: relative;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.checkbox-option input[type="checkbox"]:checked {
+    border-color: var(--color-black);
+    background-color: var(--color-black);
+}
+
+.checkbox-option input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-white);
+    font-size: 12px;
+    line-height: 1;
+}
+
+.checkbox-option input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.checkbox-label {
+    color: var(--color-charcoal);
+    font-size: 1em;
+}
+
+/* ========================================
+   Rating Scale Styles
+   ======================================== */
+.rating-scale {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.rating-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    color: var(--color-grey);
+}
+
+.rating-options {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-xs);
+}
+
+.rating-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    flex: 1;
+}
+
+.rating-option:hover {
+    background-color: var(--color-very-light-grey);
+}
+
+.rating-option:focus-within {
+    outline: 2px solid var(--color-black);
+    outline-offset: 2px;
+}
+
+.rating-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.rating-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: var(--color-white);
+    border: 2px solid var(--color-light-grey);
+    border-radius: 50%;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-charcoal);
+    transition: all var(--transition-fast);
+    font-size: 1.1em;
+}
+
+.rating-option input[type="radio"]:checked + .rating-value {
+    background: var(--color-black);
+    border-color: var(--color-black);
+    color: var(--color-white);
+    transform: scale(1.1);
+}
+
+.rating-option input[type="radio"]:focus + .rating-value {
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ========================================
+   Textarea Styles
+   ======================================== */
+.textarea-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.textarea-container textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width) solid var(--color-light-grey);
+    border-radius: var(--border-radius);
+    font-family: var(--font-family);
+    font-size: 1em;
+    color: var(--color-charcoal);
+    resize: vertical;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background: var(--color-white);
+}
+
+.textarea-container textarea:focus {
+    outline: none;
+    border-color: var(--color-black);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.textarea-container textarea::placeholder {
+    color: var(--color-light-grey);
+}
+
+.help-text {
+    font-size: 0.85em;
+    color: var(--color-grey);
+    font-style: italic;
+}
+
+.char-count {
+    font-size: 0.8em;
+    color: var(--color-grey);
+    text-align: right;
+}
+
+/* ========================================
+   Error Messages
+   ======================================== */
+.error-message {
+    color: #d32f2f; /* Red for errors - accessibility requirement */
+    font-size: 0.85em;
+    margin-top: var(--spacing-xs);
+    min-height: 1em;
+}
+
+.error-message:empty {
+    display: none;
+}
+
+.general-error {
+    margin-bottom: var(--spacing-md);
+    text-align: center;
+}
+
+/* ========================================
+   Form Controls (Submit Button)
+   ======================================== */
+.form-controls {
+    text-align: center;
+}
+
+.form-summary {
+    margin-bottom: var(--spacing-lg);
+    color: var(--color-grey);
+}
+
+.submit-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-xl);
+    background: var(--color-black);
+    color: var(--color-white);
+    border: none;
+    border-radius: var(--border-radius);
+    font-family: var(--font-family);
+    font-size: 1.1em;
+    font-weight: var(--font-weight-bold);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+    text-decoration: none;
+}
+
+.submit-button:hover:not(:disabled) {
+    background: #222222;
+    transform: translateY(-1px);
+}
+
+.submit-button:focus {
+    outline: 2px solid var(--color-black);
+    outline-offset: 2px;
+}
+
+.submit-button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.submit-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.button-loading {
+    display: none;
+}
+
+.submit-button:disabled .button-text {
+    display: none;
+}
+
+.submit-button:disabled .button-loading {
+    display: inline;
+}
+
+.submit-help {
+    margin-top: var(--spacing-sm);
+    font-size: 0.85em;
+    color: var(--color-grey);
+    font-style: italic;
+}
+
+/* ========================================
+   Footer
+   ======================================== */
+.footer {
+    text-align: center;
+    padding: var(--spacing-xl) 0 var(--spacing-lg);
+    color: var(--color-grey);
+    font-size: 0.9em;
+    border-top: var(--border-width) solid var(--color-light-grey);
+    margin-top: var(--spacing-lg);
+}
+
+/* ========================================
+   Responsive Design
+   ======================================== */
+
+/* Tablet */
+@media (min-width: 600px) {
+    .container {
+        padding: var(--spacing-xl) var(--spacing-lg);
+    }
+    
+    .header h1 {
+        font-size: clamp(32px, 5vw, 40px);
+    }
+    
+    .radio-group {
+        gap: var(--spacing-sm);
+    }
+    
+    .rating-options {
+        gap: var(--spacing-sm);
+    }
+}
+
+/* Desktop */
+@media (min-width: 900px) {
+    .container {
+        padding: var(--spacing-2xl) var(--spacing-xl);
+    }
+    
+    :root {
+        --font-size-base: 19px;
+        --font-size-large: 26px;
+    }
+    
+    .card {
+        padding: var(--spacing-xl);
+    }
+    
+    .radio-group {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-sm);
+    }
+    
+    .checkbox-group {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-sm);
+    }
+    
+    /* Make rating scale horizontal and evenly spaced */
+    .rating-options {
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .rating-option {
+        flex: 1;
+    }
+}
+
+/* Large Desktop */
+@media (min-width: 1200px) {
+    .radio-group {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .checkbox-group {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ========================================
+   Print Styles
+   ======================================== */
+@media print {
+    .skip-link,
+    .submit-button,
+    .form-summary,
+    .submit-help,
+    .char-count,
+    .hint {
+        display: none !important;
+    }
+    
+    .container {
+        max-width: 100%;
+        padding: 0;
+    }
+    
+    .card {
+        box-shadow: none;
+        border: 1px solid #999;
+        page-break-inside: avoid;
+    }
+    
+    body {
+        background: white;
+        color: black;
+    }
+}
+
+/* ========================================
+   Reduced Motion
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ========================================
+   High Contrast Mode
+   ======================================== */
+@media (prefers-contrast: more) {
+    .radio-option input[type="radio"] {
+        border-width: 3px;
+    }
+    
+    .checkbox-option input[type="checkbox"] {
+        border-width: 3px;
+    }
+    
+    .rating-value {
+        border-width: 3px;
+    }
+}
+
+/* ========================================
+   Focus Visible (Keyboard Navigation)
+   ======================================== */
+:focus-visible {
+    outline: 2px solid var(--color-black);
+    outline-offset: 2px;
+}
+
+/* Ensure all interactive elements show focus */
+input[type="radio"]:focus-visible + *,
+input[type="checkbox"]:focus-visible + * {
+    outline: 2px solid var(--color-black);
+    outline-offset: 2px;
+}

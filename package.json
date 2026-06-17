@@ -1,0 +1,29 @@
+{
+  "name": "25-survey-app",
+  "version": "1.0.0",
+  "description": "Cloudflare Pages + Functions + D1 survey app for a South African economy data visualisation project",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public --project-name 25-survey-app",
+    "db:create": "wrangler d1 create 25-survey-app-db",
+    "db:apply": "wrangler d1 execute 25-survey-app-db --remote --file=schema.sql"
+  },
+  "keywords": [
+    "survey",
+    "cloudflare",
+    "d1",
+    "worker",
+    "data-visualisation",
+    "south-africa",
+    "economy"
+  ],
+  "author": "Data Visualisation Project Team",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

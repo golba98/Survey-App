@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>SA Economy Survey - Icon Only</title>
+  <desc>Minimal black and white logo combining South Africa outline with data visualization elements</desc>
+  
+  <!-- Clean geometric icon combining SA outline with data visualization -->
+  <g fill="none" stroke="#000000" stroke-width="10" stroke-linecap="square" stroke-linejoin="miter">
+    
+    <!-- Abstract South Africa shape (hexagonal/triangular fusion) -->
+    <polygon points="50,40 150,40 180,100 150,160 50,160 20,100" />
+    
+    <!-- Vertical data bars within the shape -->
+    <line x1="60" y1="160" x2="60" y2="80" />
+    <line x1="80" y1="160" x2="80" y2="60" />
+    <line x1="100" y1="160" x2="100" y2="100" />
+    <line x1="120" y1="160" x2="120" y2="70" />
+    <line x1="140" y1="160" x2="140" y2="90" />
+    
+    <!-- Horizontal baseline -->
+    <line x1="50" y1="160" x2="150" y2="160" />
+  </g>
+  
+  <!-- Subtle survey data point dots -->
+  <g fill="#000000">
+    <circle cx="70" cy="50" r="3" />
+    <circle cx="130" cy="55" r="3" />
+    <circle cx="100" cy="85" r="3" />
+  </g>
+</svg>
