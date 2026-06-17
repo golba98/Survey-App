@@ -1,11 +1,11 @@
 # survey-app
 
-“Putting the South African Economy Into Perspective” is a Cloudflare Pages + Functions + D1 survey app for collecting anonymous grouped responses about cost of living and economic pressure in South Africa.
+“Putting the South African Economy Into Perspective” is a Cloudflare Worker + static assets + D1 survey app for collecting anonymous grouped responses about cost of living and economic pressure in South Africa.
 
 ## Project Description
 
 - Frontend: plain HTML, CSS, and JavaScript in `public/`
-- Backend: Cloudflare Pages Functions in `functions/`
+- Backend: Cloudflare Worker in `src/`
 - Database: Cloudflare D1 bound as `DB`
 - Privacy: no names, phone numbers, emails, exact addresses, or ID numbers are collected
 - Duplicate prevention: uses a salted IP hash only; raw IP addresses are never stored
@@ -19,24 +19,27 @@
 │   ├── success.html
 │   ├── styles.css
 │   └── script.js
-├── functions/
-│   ├── submit.js
-│   └── export.js
+├── src/
+│   ├── export.js
+│   ├── index.js
+│   ├── security.js
+│   └── submit.js
 ├── schema.sql
 ├── wrangler.toml
 ├── package.json
-├── .gitignore
 └── README.md
 ```
 
 - `public/index.html`: main survey form
 - `public/success.html`: thank-you page after a successful submit
 - `public/styles.css`: shared styling
-- `public/script.js`: browser-side validation and form submission
-- `functions/submit.js`: accepts `POST /submit`
-- `functions/export.js`: serves `GET /export`
+- `public/script.js`: browser-side validation and form submission to `/submit`
+- `src/index.js`: Worker entrypoint and request router
+- `src/submit.js`: accepts `POST /submit`
+- `src/export.js`: serves `GET /export`
+- `src/security.js`: shared API/static headers, CORS, and error helpers
 - `schema.sql`: D1 schema and indexes
-- `wrangler.toml`: Cloudflare Pages and D1 configuration
+- `wrangler.toml`: Worker, assets, and D1 configuration
 
 ## Survey Content
 
@@ -73,13 +76,23 @@ npx wrangler login
 npm run db:create
 ```
 
-Copy the real database ID from the command output and replace `YOUR_D1_DATABASE_ID_HERE` in `wrangler.toml`.
+The Worker is configured to use:
 
-### 4. Set required secrets
+- Project name: `survey-app`
+- D1 database name: `25-survey-app-db`
+- D1 binding: `DB`
+- D1 database ID: `eeca209b-e57d-45d7-a29c-ec2ef24e57dc`
+
+### 4. Set local secrets
+
+Create a `.dev.vars` file that is not committed:
 
 ```bash
-npx wrangler pages secret put EXPORT_TOKEN --project-name survey-app
-npx wrangler pages secret put IP_HASH_SECRET --project-name survey-app
+cat > .dev.vars <<'EOF'
+EXPORT_TOKEN=replace-with-a-local-export-token
+IP_HASH_SECRET=replace-with-a-local-ip-hash-secret
+ALLOWED_ORIGINS=http://localhost:8787,http://127.0.0.1:8787
+EOF
 ```
 
 Required secrets:
@@ -100,69 +113,64 @@ npm run db:apply
 npm run dev
 ```
 
-The app will run locally with Pages Functions and D1 bindings through Wrangler.
+The app runs locally through `wrangler dev` with the Worker entrypoint and static assets.
 
-## D1 Database Creation
+## Worker Deployment
 
-The included script creates a database named `25-survey-app-db`:
+This app deploys as a Cloudflare Worker Git deployment with static assets and a D1 binding. It is not a Cloudflare Pages project.
 
-```bash
-npm run db:create
-```
-
-If you use a different D1 name manually, keep the binding name `DB` and update scripts or commands accordingly.
-
-## Schema Application
-
-Apply the database schema after creating the database and setting the real database ID:
-
-```bash
-npm run db:apply
-```
-
-This creates the `survey_responses` table and indexes used for timestamp filtering and duplicate prevention.
-
-If you already created a D1 database with the older schema, the simplest path is to create a fresh D1 database and apply the updated `schema.sql` before using the hardened handlers.
-
-## Cloudflare Pages Deployment
-
-This app is a Cloudflare Pages project with Pages Functions and a D1 binding. It is not a standalone Worker project.
-
-Deploy the project with:
+Deploy manually with:
 
 ```bash
 npm run deploy
 ```
 
-That command publishes the `public/` directory and the `functions/` directory together as a manual Pages deployment for the `survey-app` project.
+That runs:
 
-For a Git-connected Cloudflare Pages project, do not put `npx wrangler pages deploy ...` into the Cloudflare dashboard deploy command. That command is only for manual deploys from the local terminal.
+```bash
+npx wrangler deploy
+```
 
-Cloudflare dashboard settings:
+## Cloudflare Dashboard Build Settings
 
-- Project type: Pages
+Use these exact settings in Cloudflare:
+
+- Project type: Worker Git deployment
 - Project name: `survey-app`
-- Framework preset: None / Static HTML
-- Build command: leave empty
-- Deploy command: leave empty
-- Build output directory: `public`
-- Root directory: `/`
+- Build command: empty
+- Deploy command: `npx wrangler deploy`
+- Non-production/version command: `npx wrangler versions upload`
+- Path: `/`
+- API token: `survey-app build token`
 
-Dashboard fix steps:
+### Variables and secrets
 
-1. Go to `Workers & Pages → survey-app → Settings → Build & deployments`
-2. Set `Build command` to empty
-3. Set `Deploy command` to empty
-4. Set `Build output directory` to `public`
-5. Set `Root directory` to `/`
-6. Retry the build
+Add these secrets:
 
-D1 binding required in the Pages dashboard:
+- `EXPORT_TOKEN`
+- `IP_HASH_SECRET`
+- `ALLOWED_ORIGINS` (optional)
 
-- Variable name: `DB`
+Set them with:
+
+```bash
+npx wrangler secret put EXPORT_TOKEN
+npx wrangler secret put IP_HASH_SECRET
+npx wrangler secret put ALLOWED_ORIGINS
+```
+
+### D1 binding
+
+- Binding name: `DB`
 - Database: `25-survey-app-db`
 
-If the binding is missing, add it here:
+Apply the schema with:
+
+```bash
+npm run db:apply
+```
+
+If the D1 binding is missing in the dashboard, add it here:
 
 `Workers & Pages → survey-app → Settings → Bindings → D1 database binding`
 
@@ -197,10 +205,11 @@ Route:
 GET /export
 ```
 
-Example URL:
+Example URLs:
 
 ```text
 /export?format=json&token=YOUR_TOKEN
+/export?format=csv&token=YOUR_TOKEN
 ```
 
 Query parameters:
@@ -212,84 +221,40 @@ Query parameters:
 
 The export only includes survey response fields and excludes internal duplicate-prevention data.
 
-## CSV/JSON Export Examples
+## Local Test Checklist
 
-JSON:
-
-```bash
-curl "https://your-project.pages.dev/export?token=YOUR_EXPORT_TOKEN"
-```
-
-CSV:
+Run:
 
 ```bash
-curl "https://your-project.pages.dev/export?format=csv&token=YOUR_EXPORT_TOKEN"
-```
-
-Date-filtered CSV:
-
-```bash
-curl "https://your-project.pages.dev/export?format=csv&start=2026-01-01&end=2026-12-31&token=YOUR_EXPORT_TOKEN"
-```
-
-## Basic Testing Checklist
-
-- Open `/` and confirm the survey loads correctly
-- Confirm `styles.css` and `script.js` load from the same directory as `index.html`
-- Submit a valid response and confirm the frontend posts to `/submit`
-- Confirm successful submission redirects to `/success.html`
-- Leave required fields blank and confirm validation blocks submission
-- Submit invalid rating values and confirm the server rejects them
-- Submit unknown answer option values and confirm the server rejects them
-- Submit a comment longer than 500 characters and confirm the server rejects it
-- Submit unexpected extra JSON fields and confirm the server rejects them
-- Submit repeated attempts quickly and confirm the throttle responds without breaking normal use
-- Submit twice from the same browser and confirm duplicate protection blocks the second submission
-- Confirm `/export` rejects requests without a valid `token`
-- Confirm `/export` rejects requests with a wrong token
-- Confirm `/export?format=json&token=...` returns JSON
-- Confirm `/export?format=csv&token=...` returns CSV
-- Confirm the D1 binding name is `DB` everywhere
-- Confirm no raw IP is stored in D1
-
-## Manual Setup Still Required
-
-- In the Cloudflare dashboard, keep the Pages project name as `survey-app`
-- Create the `EXPORT_TOKEN` secret on the `survey-app` Pages project
-- Create the `IP_HASH_SECRET` secret on the `survey-app` Pages project
-- Confirm the D1 binding is present as `DB`
-- Log in to Cloudflare before running database or manual deploy commands
-
-## Local Security Setup
-
-For local development, create a `.dev.vars` file that is not committed:
-
-```bash
-cat > .dev.vars <<'EOF'
-EXPORT_TOKEN=replace-with-a-local-export-token
-IP_HASH_SECRET=replace-with-a-local-ip-hash-secret
-ALLOWED_ORIGINS=http://localhost:8788,http://127.0.0.1:8788
-EOF
-```
-
-Set production secrets with:
-
-```bash
-npx wrangler pages secret put EXPORT_TOKEN --project-name survey-app
-npx wrangler pages secret put IP_HASH_SECRET --project-name survey-app
-```
-
-Run locally with:
-
-```bash
+npm install
 npm run dev
 ```
 
-Manual local security tests:
+Then verify:
 
-```bash
-curl -i "http://localhost:8788/export"
-curl -i "http://localhost:8788/export?token=wrong-token"
-curl -i "http://localhost:8788/export?token=replace-with-a-local-export-token"
-```
-```
+- Open the local Worker URL
+- Submit a valid response and confirm the frontend posts to `/submit`
+- Confirm successful submission redirects to `/success.html`
+- Confirm `/export?format=json&token=YOUR_LOCAL_TOKEN` returns JSON
+- Confirm `/export?format=csv&token=YOUR_LOCAL_TOKEN` returns CSV
+- Confirm an invalid export token returns `401`
+- Confirm duplicate submission protection blocks the second submission
+- Confirm repeated attempts quickly trigger throttling without storing raw IP addresses
+
+## Cloudflare Retry Steps
+
+1. Go to `Workers & Pages → survey-app`
+2. Open `Settings`
+3. Open `Builds & deployments`
+4. Confirm:
+   - Build command is empty
+   - Deploy command is `npx wrangler deploy`
+   - Non-production/version command is `npx wrangler versions upload`
+   - Path is `/`
+5. Open `Settings → Variables and Secrets` and confirm:
+   - `EXPORT_TOKEN`
+   - `IP_HASH_SECRET`
+   - optional `ALLOWED_ORIGINS`
+6. Open `Settings → Bindings` and confirm:
+   - `DB → 25-survey-app-db`
+7. Retry the deployment from the latest Git build in the Cloudflare dashboard

@@ -1,13 +1,11 @@
-# Cloudflare Pages + Functions configuration for 25-survey-app.
-# Add secrets with:
-#   wrangler pages secret put EXPORT_TOKEN --project-name survey-app
-#   wrangler pages secret put IP_HASH_SECRET --project-name survey-app
-# Optional browser CORS allowlist:
-#   ALLOWED_ORIGINS=https://example.com,https://admin.example.com
-
 name = "survey-app"
+main = "src/index.js"
 compatibility_date = "2026-06-17"
-pages_build_output_dir = "./public"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"

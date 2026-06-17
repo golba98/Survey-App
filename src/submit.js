@@ -4,7 +4,7 @@ import {
   rejectDisallowedOrigin,
   serverError,
   serviceUnavailable,
-} from "./_lib/security.js";
+} from "./security.js";
 
 const VALID_OPTIONS = {
   age_range: ["18-21", "22-25", "26-30", "31+"],
@@ -34,8 +34,7 @@ const THROTTLE_MAX_ATTEMPTS = 3;
 const USER_AGENT_MAX_LENGTH = 255;
 const COMMENT_MAX_LENGTH = 500;
 
-export async function onRequest(context) {
-  const { request, env } = context;
+export async function handleSubmit(request, env) {
   const allowCors = true;
 
   if (request.method === "OPTIONS") {
@@ -43,16 +42,12 @@ export async function onRequest(context) {
   }
 
   if (request.method !== "POST") {
-    return jsonResponse(
-      { error: "Method not allowed. Use POST /submit." },
-      405,
-      {
-        request,
-        env,
-        allowCors,
-        extraHeaders: { Allow: "POST, OPTIONS" },
-      },
-    );
+    return jsonResponse({ error: "Method not allowed. Use POST /submit." }, 405, {
+      request,
+      env,
+      allowCors,
+      extraHeaders: { Allow: "POST, OPTIONS" },
+    });
   }
 
   const originRejection = rejectDisallowedOrigin(request, env, allowCors);
@@ -73,21 +68,21 @@ export async function onRequest(context) {
   try {
     payload = await request.json();
   } catch {
-    return jsonResponse(
-      { error: "Request body must be valid JSON." },
-      400,
-      { request, env, allowCors },
-    );
+    return jsonResponse({ error: "Request body must be valid JSON." }, 400, {
+      request,
+      env,
+      allowCors,
+    });
   }
 
   const errors = [];
   const normalizedPayload = normalizePayload(payload, errors);
   if (errors.length > 0) {
-    return jsonResponse(
-      { error: "Validation failed.", details: errors },
-      400,
-      { request, env, allowCors },
-    );
+    return jsonResponse({ error: "Validation failed.", details: errors }, 400, {
+      request,
+      env,
+      allowCors,
+    });
   }
 
   const userAgent = normalizeUserAgent(request.headers.get("User-Agent"));
@@ -106,7 +101,9 @@ export async function onRequest(context) {
 
     const duplicate = await env.DB.prepare(
       "SELECT id FROM survey_responses WHERE ip_hash = ? AND user_agent = ? LIMIT 1",
-    ).bind(ipHash, userAgent).first();
+    )
+      .bind(ipHash, userAgent)
+      .first();
 
     if (duplicate) {
       return jsonResponse(
@@ -131,20 +128,22 @@ export async function onRequest(context) {
         ip_hash,
         user_agent
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(
-      normalizedPayload.age_range,
-      normalizedPayload.status,
-      normalizedPayload.main_pressure,
-      normalizedPayload.cost_increased,
-      JSON.stringify(normalizedPayload.cut_back_on),
-      normalizedPayload.work_worry_rating,
-      normalizedPayload.income_keeps_up_rating,
-      normalizedPayload.transport_cost,
-      normalizedPayload.food_cost,
-      normalizedPayload.comment,
-      ipHash,
-      userAgent,
-    ).run();
+    )
+      .bind(
+        normalizedPayload.age_range,
+        normalizedPayload.status,
+        normalizedPayload.main_pressure,
+        normalizedPayload.cost_increased,
+        JSON.stringify(normalizedPayload.cut_back_on),
+        normalizedPayload.work_worry_rating,
+        normalizedPayload.income_keeps_up_rating,
+        normalizedPayload.transport_cost,
+        normalizedPayload.food_cost,
+        normalizedPayload.comment,
+        ipHash,
+        userAgent,
+      )
+      .run();
 
     return jsonResponse(
       {
@@ -190,7 +189,6 @@ function normalizePayload(payload, errors) {
   validateChoice(errors, normalized.cost_increased, "Cost of living increase", VALID_OPTIONS.cost_increased);
   validateChoice(errors, normalized.transport_cost, "Monthly transport cost", VALID_OPTIONS.transport_cost);
   validateChoice(errors, normalized.food_cost, "Monthly food cost", VALID_OPTIONS.food_cost);
-
   validateRating(errors, normalized.work_worry_rating, "Work worry rating");
   validateRating(errors, normalized.income_keeps_up_rating, "Income/allowance keeps up rating");
 
@@ -281,10 +279,14 @@ async function checkAndUpdateThrottle(db, throttleKey) {
   const now = Math.floor(Date.now() / 1000);
   const existing = await db.prepare(
     "SELECT window_started_at, attempt_count FROM submission_throttle WHERE throttle_key = ? LIMIT 1",
-  ).bind(throttleKey).first();
+  )
+    .bind(throttleKey)
+    .first();
 
   const withinWindow =
-    existing && Number.isInteger(existing.window_started_at) && now - existing.window_started_at < THROTTLE_WINDOW_SECONDS;
+    existing &&
+    Number.isInteger(existing.window_started_at) &&
+    now - existing.window_started_at < THROTTLE_WINDOW_SECONDS;
   const attemptCount = withinWindow ? existing.attempt_count + 1 : 1;
 
   await db.prepare(
@@ -294,12 +296,9 @@ async function checkAndUpdateThrottle(db, throttleKey) {
        window_started_at = excluded.window_started_at,
        attempt_count = excluded.attempt_count,
        last_seen_at = excluded.last_seen_at`,
-  ).bind(
-    throttleKey,
-    withinWindow ? existing.window_started_at : now,
-    attemptCount,
-    now,
-  ).run();
+  )
+    .bind(throttleKey, withinWindow ? existing.window_started_at : now, attemptCount, now)
+    .run();
 
   return {
     blocked: withinWindow && attemptCount > THROTTLE_MAX_ATTEMPTS,

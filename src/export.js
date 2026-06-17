@@ -5,7 +5,7 @@ import {
   serverError,
   serviceUnavailable,
   textResponse,
-} from "./_lib/security.js";
+} from "./security.js";
 
 const EXPORT_COLUMNS = [
   "id",
@@ -22,8 +22,7 @@ const EXPORT_COLUMNS = [
   "comment",
 ];
 
-export async function onRequest(context) {
-  const { request, env } = context;
+export async function handleExport(request, env) {
   const allowCors = false;
 
   if (request.method === "OPTIONS") {
@@ -31,16 +30,12 @@ export async function onRequest(context) {
   }
 
   if (request.method !== "GET") {
-    return jsonResponse(
-      { error: "Method not allowed. Use GET /export." },
-      405,
-      {
-        request,
-        env,
-        allowCors,
-        extraHeaders: { Allow: "GET, OPTIONS" },
-      },
-    );
+    return jsonResponse({ error: "Method not allowed. Use GET /export." }, 405, {
+      request,
+      env,
+      allowCors,
+      extraHeaders: { Allow: "GET, OPTIONS" },
+    });
   }
 
   const originRejection = rejectDisallowedOrigin(request, env, allowCors);
@@ -61,30 +56,30 @@ export async function onRequest(context) {
     const providedToken = url.searchParams.get("token");
 
     if (!providedToken || providedToken !== env.EXPORT_TOKEN) {
-      return jsonResponse(
-        { error: "Unauthorized." },
-        401,
-        { request, env, allowCors },
-      );
+      return jsonResponse({ error: "Unauthorized." }, 401, {
+        request,
+        env,
+        allowCors,
+      });
     }
 
     const format = url.searchParams.get("format") || "json";
     if (!["json", "csv"].includes(format)) {
-      return jsonResponse(
-        { error: "format must be either json or csv." },
-        400,
-        { request, env, allowCors },
-      );
+      return jsonResponse({ error: "format must be either json or csv." }, 400, {
+        request,
+        env,
+        allowCors,
+      });
     }
 
     const start = url.searchParams.get("start");
     const end = url.searchParams.get("end");
     if ((start && !isIsoDate(start)) || (end && !isIsoDate(end))) {
-      return jsonResponse(
-        { error: "start and end must use YYYY-MM-DD format." },
-        400,
-        { request, env, allowCors },
-      );
+      return jsonResponse({ error: "start and end must use YYYY-MM-DD format." }, 400, {
+        request,
+        env,
+        allowCors,
+      });
     }
 
     const statement = buildExportStatement(env.DB, start, end);
@@ -92,19 +87,15 @@ export async function onRequest(context) {
     const rows = (result.results || []).map(formatRow);
 
     if (format === "csv") {
-      return textResponse(
-        toCsv(rows),
-        200,
-        {
-          request,
-          env,
-          allowCors,
-          extraHeaders: {
-            "content-type": "text/csv; charset=utf-8",
-            "content-disposition": 'attachment; filename="survey-export.csv"',
-          },
+      return textResponse(toCsv(rows), 200, {
+        request,
+        env,
+        allowCors,
+        extraHeaders: {
+          "content-type": "text/csv; charset=utf-8",
+          "content-disposition": 'attachment; filename="survey-export.csv"',
         },
-      );
+      });
     }
 
     return jsonResponse(rows, 200, { request, env, allowCors });
