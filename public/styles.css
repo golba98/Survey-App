@@ -615,7 +615,7 @@ body {
     .container {
         padding: var(--spacing-xl) var(--spacing-lg);
     }
-    
+
     .header h1 {
         font-size: clamp(32px, 5vw, 40px);
     }
@@ -634,7 +634,7 @@ body {
     .container {
         padding: var(--spacing-2xl) var(--spacing-xl);
     }
-    
+
     :root {
         --font-size-base: 19px;
         --font-size-large: 26px;

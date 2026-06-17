@@ -3,6 +3,8 @@
 # Add secrets with:
 #   wrangler pages secret put EXPORT_TOKEN
 #   wrangler pages secret put IP_HASH_SECRET
+# Optional browser CORS allowlist:
+#   ALLOWED_ORIGINS=https://example.com,https://admin.example.com
 
 name = "25-survey-app"
 compatibility_date = "2026-06-17"

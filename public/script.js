@@ -20,6 +20,7 @@
 
     // Pages Function endpoint
     const API_SUBMIT_URL = '/submit';
+    const COMMENT_MAX_LENGTH = 500;
 
     // ========================================
     // Initialize
@@ -58,7 +59,7 @@
     function updateCharCount() {
         if (!commentTextarea || !charCount) return;
         const count = commentTextarea.value.length;
-        const max = commentTextarea.maxLength || 2000;
+        const max = commentTextarea.maxLength || COMMENT_MAX_LENGTH;
         charCount.textContent = `${count} / ${max} characters`;
     }
 
@@ -180,10 +181,10 @@
         }
 
         // Validate comment length (optional but has max length)
-        if (commentTextarea && commentTextarea.value.length > 2000) {
+        if (commentTextarea && commentTextarea.value.length > COMMENT_MAX_LENGTH) {
             const commentError = document.getElementById('error-comment');
             if (commentError) {
-                commentError.textContent = 'Comment is too long (max 2000 characters)';
+                commentError.textContent = `Comment is too long (max ${COMMENT_MAX_LENGTH} characters)`;
                 isValid = false;
             }
         }
@@ -262,7 +263,10 @@
         .then(response => {
             if (!response.ok) {
                 return response.json().then(err => {
-                    throw new Error(err.error || err.message || 'Submission failed');
+                    const detail = Array.isArray(err.details) && err.details.length > 0
+                        ? err.details[0]
+                        : null;
+                    throw new Error(detail || err.error || err.message || 'Submission failed');
                 });
             }
             return response.json();

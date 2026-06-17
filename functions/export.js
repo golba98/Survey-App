@@ -1,6 +1,11 @@
-const JSON_HEADERS = {
-  "content-type": "application/json; charset=utf-8",
-};
+import {
+  jsonResponse,
+  optionsResponse,
+  rejectDisallowedOrigin,
+  serverError,
+  serviceUnavailable,
+  textResponse,
+} from "./_lib/security.js";
 
 const EXPORT_COLUMNS = [
   "id",
@@ -19,85 +24,129 @@ const EXPORT_COLUMNS = [
 
 export async function onRequest(context) {
   const { request, env } = context;
+  const allowCors = false;
 
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        Allow: "GET, OPTIONS",
-      },
-    });
+    return optionsResponse(request, env, ["GET", "OPTIONS"], allowCors);
   }
 
   if (request.method !== "GET") {
-    return json(
+    return jsonResponse(
       { error: "Method not allowed. Use GET /export." },
       405,
-      { Allow: "GET, OPTIONS" },
+      {
+        request,
+        env,
+        allowCors,
+        extraHeaders: { Allow: "GET, OPTIONS" },
+      },
     );
   }
 
+  const originRejection = rejectDisallowedOrigin(request, env, allowCors);
+  if (originRejection) {
+    return originRejection;
+  }
+
   if (!env.DB) {
-    return json({ error: "D1 binding DB is not configured." }, 500);
+    return serviceUnavailable("Missing D1 binding for export handler.", request, env, { allowCors });
   }
 
   if (!env.EXPORT_TOKEN) {
-    return json({ error: "Missing EXPORT_TOKEN secret." }, 500);
+    return serviceUnavailable("Missing EXPORT_TOKEN for export handler.", request, env, { allowCors });
   }
 
-  const url = new URL(request.url);
-  const providedToken = url.searchParams.get("token");
+  try {
+    const url = new URL(request.url);
+    const providedToken = url.searchParams.get("token");
 
-  if (!providedToken || providedToken !== env.EXPORT_TOKEN) {
-    return json({ error: "Unauthorized." }, 401);
+    if (!providedToken || providedToken !== env.EXPORT_TOKEN) {
+      return jsonResponse(
+        { error: "Unauthorized." },
+        401,
+        { request, env, allowCors },
+      );
+    }
+
+    const format = url.searchParams.get("format") || "json";
+    if (!["json", "csv"].includes(format)) {
+      return jsonResponse(
+        { error: "format must be either json or csv." },
+        400,
+        { request, env, allowCors },
+      );
+    }
+
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
+    if ((start && !isIsoDate(start)) || (end && !isIsoDate(end))) {
+      return jsonResponse(
+        { error: "start and end must use YYYY-MM-DD format." },
+        400,
+        { request, env, allowCors },
+      );
+    }
+
+    const statement = buildExportStatement(env.DB, start, end);
+    const result = await statement.all();
+    const rows = (result.results || []).map(formatRow);
+
+    if (format === "csv") {
+      return textResponse(
+        toCsv(rows),
+        200,
+        {
+          request,
+          env,
+          allowCors,
+          extraHeaders: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": 'attachment; filename="survey-export.csv"',
+          },
+        },
+      );
+    }
+
+    return jsonResponse(rows, 200, { request, env, allowCors });
+  } catch (error) {
+    return serverError("Export handler failed.", error, request, env, { allowCors });
   }
-
-  const format = url.searchParams.get("format") || "json";
-  if (!["json", "csv"].includes(format)) {
-    return json({ error: "format must be either json or csv." }, 400);
-  }
-
-  const start = url.searchParams.get("start");
-  const end = url.searchParams.get("end");
-  if ((start && !isIsoDate(start)) || (end && !isIsoDate(end))) {
-    return json({ error: "start and end must use YYYY-MM-DD format." }, 400);
-  }
-
-  const { query, bindings } = buildExportQuery(start, end);
-  const result = await env.DB.prepare(query).bind(...bindings).all();
-  const rows = (result.results || []).map(formatRow);
-
-  if (format === "csv") {
-    return new Response(toCsv(rows), {
-      status: 200,
-      headers: {
-        "content-type": "text/csv; charset=utf-8",
-        "content-disposition": 'attachment; filename="survey-export.csv"',
-      },
-    });
-  }
-
-  return json(rows, 200);
 }
 
-function buildExportQuery(start, end) {
-  const conditions = [];
-  const bindings = [];
-
+function buildExportStatement(db, start, end) {
   if (start) {
-    conditions.push("date(timestamp) >= date(?)");
-    bindings.push(start);
+    if (end) {
+      return db.prepare(
+        `SELECT ${EXPORT_COLUMNS.join(", ")}
+         FROM survey_responses
+         WHERE date(timestamp) >= date(?)
+           AND date(timestamp) <= date(?)
+         ORDER BY timestamp DESC`,
+      ).bind(start, end);
+    }
+
+    return db.prepare(
+      `SELECT ${EXPORT_COLUMNS.join(", ")}
+       FROM survey_responses
+       WHERE date(timestamp) >= date(?)
+       ORDER BY timestamp DESC`,
+    ).bind(start);
   }
 
   if (end) {
-    conditions.push("date(timestamp) <= date(?)");
-    bindings.push(end);
+    return db.prepare(
+      `SELECT ${EXPORT_COLUMNS.join(", ")}
+       FROM survey_responses
+       WHERE date(timestamp) <= date(?)
+       ORDER BY timestamp DESC`,
+    ).bind(end);
   }
 
-  const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
-  const query = `SELECT ${EXPORT_COLUMNS.join(", ")} FROM survey_responses${whereClause} ORDER BY timestamp DESC`;
-
-  return { query, bindings };
+  return db.prepare(
+    `SELECT ${EXPORT_COLUMNS.join(", ")}
+     FROM survey_responses
+     ORDER BY timestamp DESC`,
+  );
 }
 
 function formatRow(row) {
@@ -155,14 +204,4 @@ function escapeCsvValue(value) {
 
 function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function json(body, status, extraHeaders = {}) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...JSON_HEADERS,
-      ...extraHeaders,
-    },
-  });
 }
