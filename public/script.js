@@ -251,6 +251,11 @@
         // Mark as submitting
         setSubmitButtonState(true);
 
+        // Clear any previous error
+        if (formError) {
+            formError.textContent = '';
+        }
+
         fetch(API_SUBMIT_URL, {
             method: 'POST',
             headers: {
@@ -266,28 +271,53 @@
                     const detail = Array.isArray(err.details) && err.details.length > 0
                         ? err.details[0]
                         : null;
-                    throw new Error(detail || err.error || err.message || 'Submission failed');
+
+                    // Distinguish server-configuration failures from user errors
+                    if (response.status === 503) {
+                        throw new Error(
+                            'The survey service is temporarily unavailable. ' +
+                            'Please try again in a few minutes, or contact support if the problem persists.'
+                        );
+                    }
+
+                    throw new Error(detail || err.error || err.message || 'Submission failed. Please try again.');
+                }).catch(parseErr => {
+                    // Response body was not JSON (e.g., network-level error page)
+                    if (parseErr instanceof SyntaxError) {
+                        if (response.status === 503) {
+                            throw new Error(
+                                'The survey service is temporarily unavailable. ' +
+                                'Please try again in a few minutes.'
+                            );
+                        }
+                        throw new Error(`Submission failed (HTTP ${response.status}). Please try again.`);
+                    }
+                    throw parseErr;
                 });
             }
             return response.json();
         })
         .then(result => {
-            // Success! Mark as submitted
+            if (!result.success) {
+                throw new Error(result.message || result.error || 'Submission failed. Please try again.');
+            }
+
+            // Only mark as submitted after the server confirms it was saved.
             localStorage.setItem(STORAGE_KEY, 'true');
-            
+
             // Redirect to success page
             window.location.href = '/success.html';
         })
         .catch(error => {
             console.error('Submission error:', error);
-            
-            // Show error message
+
+            // Show error message – do NOT clear the form so the user can retry
             if (formError) {
-                const message = error.message || 'An error occurred. Please try again.';
+                const message = error.message || 'An unexpected error occurred. Please try again.';
                 formError.textContent = message;
             }
-            
-            // Re-enable submit button
+
+            // Re-enable submit button so the user can try again
             setSubmitButtonState(false);
         });
     }
