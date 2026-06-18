@@ -4,7 +4,7 @@
   <desc>Small favicon-style mark for SA Economy Survey</desc>
   
   <!-- Simplified favicon version - must be readable at 16x16 -->
-  <g fill="none" stroke="#000000" stroke-width="6" stroke-linecap="square" stroke-linejoin="miter">
+  <g fill="none" stroke="#f6f3ee" stroke-width="6" stroke-linecap="square" stroke-linejoin="miter">
     
     <!-- Compact abstract South Africa shape -->
     <polygon points="25,20 75,20 90,50 75,80 25,80 10,50" />
@@ -20,5 +20,5 @@
   </g>
   
   <!-- Single data point for recognition -->
-  <circle cx="50" cy="25" r="2" fill="#000000" />
+  <circle cx="50" cy="25" r="2" fill="#f6f3ee" />
 </svg>

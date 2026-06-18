@@ -322,13 +322,13 @@
         if (form) {
             form.innerHTML = `
                 <div class="card" style="text-align: center; padding: 2rem;">
-                    <h2 style="color: var(--color-black); margin-bottom: 1rem;">
+                    <h2 style="color: var(--color-off-white); margin-bottom: 1rem;">
                         Survey Already Submitted
                     </h2>
-                    <p style="color: var(--color-charcoal); margin-bottom: 1.5rem;">
+                    <p style="color: var(--color-off-white-soft); margin-bottom: 1.5rem;">
                         Thank you! You have already submitted this survey.
                     </p>
-                    <p style="color: var(--color-grey);">
+                    <p style="color: var(--color-off-white-soft);">
                         Each participant can only submit once to ensure data accuracy.
                     </p>
                 </div>
