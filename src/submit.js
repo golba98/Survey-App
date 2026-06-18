@@ -56,10 +56,22 @@ export async function handleSubmit(request, env) {
   }
 
   if (!env.DB) {
+    // The D1 database binding is missing from wrangler.toml / dashboard settings.
+    // Check: Workers & Pages → survey-app → Settings → Bindings → D1 database (DB).
+    console.error("[submit] D1 binding \"DB\" is not configured.", {
+      path: new URL(request.url).pathname,
+    });
     return serviceUnavailable("Missing D1 binding for submit handler.", request, env, { allowCors });
   }
 
   if (!env.IP_HASH_SECRET) {
+    // The IP_HASH_SECRET secret is missing from the environment.
+    // Local dev: create a .dev.vars file with IP_HASH_SECRET=<any-string>.
+    // Production: npx wrangler secret put IP_HASH_SECRET
+    console.error("[submit] Secret \"IP_HASH_SECRET\" is not set.", {
+      path: new URL(request.url).pathname,
+      hint: "Create .dev.vars locally or run: npx wrangler secret put IP_HASH_SECRET",
+    });
     return serviceUnavailable("Missing IP_HASH_SECRET for submit handler.", request, env, { allowCors });
   }
 
@@ -78,6 +90,11 @@ export async function handleSubmit(request, env) {
   const errors = [];
   const normalizedPayload = normalizePayload(payload, errors);
   if (errors.length > 0) {
+    // Log field names only – not the submitted values – to avoid logging user data.
+    console.warn("[submit] Validation failed.", {
+      errorCount: errors.length,
+      errors,
+    });
     return jsonResponse({ error: "Validation failed.", details: errors }, 400, {
       request,
       env,
@@ -92,6 +109,7 @@ export async function handleSubmit(request, env) {
   try {
     const throttleState = await checkAndUpdateThrottle(env.DB, throttleKey);
     if (throttleState.blocked) {
+      console.warn("[submit] Throttle limit reached.", { throttleKey });
       return jsonResponse(
         { error: "Too many attempts. Please wait a minute before trying again." },
         429,
@@ -106,6 +124,7 @@ export async function handleSubmit(request, env) {
       .first();
 
     if (duplicate) {
+      console.info("[submit] Duplicate submission rejected.", { duplicateId: duplicate.id });
       return jsonResponse(
         { error: "Duplicate submission detected. You have already submitted this survey." },
         409,
@@ -113,37 +132,49 @@ export async function handleSubmit(request, env) {
       );
     }
 
-    const result = await env.DB.prepare(
-      `INSERT INTO survey_responses (
-        age_range,
-        status,
-        main_pressure,
-        cost_increased,
-        cut_back_on,
-        work_worry_rating,
-        income_keeps_up_rating,
-        transport_cost,
-        food_cost,
-        comment,
-        ip_hash,
-        user_agent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        normalizedPayload.age_range,
-        normalizedPayload.status,
-        normalizedPayload.main_pressure,
-        normalizedPayload.cost_increased,
-        JSON.stringify(normalizedPayload.cut_back_on),
-        normalizedPayload.work_worry_rating,
-        normalizedPayload.income_keeps_up_rating,
-        normalizedPayload.transport_cost,
-        normalizedPayload.food_cost,
-        normalizedPayload.comment,
-        ipHash,
-        userAgent,
+    let result;
+    try {
+      result = await env.DB.prepare(
+        `INSERT INTO survey_responses (
+          age_range,
+          status,
+          main_pressure,
+          cost_increased,
+          cut_back_on,
+          work_worry_rating,
+          income_keeps_up_rating,
+          transport_cost,
+          food_cost,
+          comment,
+          ip_hash,
+          user_agent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run();
+        .bind(
+          normalizedPayload.age_range,
+          normalizedPayload.status,
+          normalizedPayload.main_pressure,
+          normalizedPayload.cost_increased,
+          JSON.stringify(normalizedPayload.cut_back_on),
+          normalizedPayload.work_worry_rating,
+          normalizedPayload.income_keeps_up_rating,
+          normalizedPayload.transport_cost,
+          normalizedPayload.food_cost,
+          normalizedPayload.comment ?? null,
+          ipHash,
+          userAgent,
+        )
+        .run();
+    } catch (dbError) {
+      // Log DB insert failure without exposing user-submitted values.
+      console.error("[submit] D1 insert failed.", {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        table: "survey_responses",
+      });
+      return serverError("Database insert failed.", dbError, request, env, { allowCors });
+    }
+
+    console.info("[submit] Survey response saved.", { id: result.meta.last_row_id });
 
     return jsonResponse(
       {
@@ -155,6 +186,9 @@ export async function handleSubmit(request, env) {
       { request, env, allowCors },
     );
   } catch (error) {
+    console.error("[submit] Unexpected error in submit handler.", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return serverError("Submit handler failed.", error, request, env, { allowCors });
   }
 }

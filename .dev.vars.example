@@ -1,0 +1,12 @@
+# Copy this file to .dev.vars and fill in real values before running `npm run dev`.
+# .dev.vars is listed in .gitignore and must NEVER be committed.
+
+# Salt used to hash IP addresses before storage (duplicate-prevention only).
+# Any non-empty string works locally; use a long random value in production.
+IP_HASH_SECRET=replace-with-a-local-ip-hash-secret
+
+# Token required to access GET /export.
+EXPORT_TOKEN=replace-with-a-local-export-token
+
+# Optional: comma-separated list of additional allowed browser origins.
+# ALLOWED_ORIGINS=https://example.com
