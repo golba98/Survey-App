@@ -23,9 +23,11 @@ import assert from "node:assert/strict";
  */
 function makeDb({ shouldFail = false, existingRow = null } = {}) {
   const rows = [];
+  const throttleRows = new Map();
 
   return {
     rows,
+    throttleRows,
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -35,13 +37,32 @@ function makeDb({ shouldFail = false, existingRow = null } = {}) {
           return this;
         },
         async first() {
-          // Duplicate-check or throttle-check queries
+          if (/FROM submission_throttle/i.test(sql)) {
+            return throttleRows.get(this._bindings[0]) || null;
+          }
+
+          // Duplicate-check query
           return existingRow;
         },
         async run() {
           if (shouldFail) {
             throw new Error("SQLITE_CONSTRAINT: CHECK constraint failed");
           }
+
+          if (/DELETE FROM submission_throttle/i.test(sql)) {
+            return { meta: {} };
+          }
+
+          if (/INSERT INTO submission_throttle/i.test(sql)) {
+            const [throttleKey, windowStartedAt, attemptCount, lastSeenAt] = this._bindings;
+            throttleRows.set(throttleKey, {
+              window_started_at: windowStartedAt,
+              attempt_count: attemptCount,
+              last_seen_at: lastSeenAt,
+            });
+            return { meta: {} };
+          }
+
           const newRow = { id: rows.length + 1 };
           rows.push({ bindings: this._bindings });
           return { meta: { last_row_id: newRow.id } };
@@ -62,6 +83,7 @@ function makeEnv(overrides = {}) {
   return {
     DB: makeDb(),
     IP_HASH_SECRET: "test-secret",
+    TURNSTILE_SECRET_KEY: "turnstile-secret",
     ALLOWED_ORIGINS: undefined,
     ...overrides,
   };
@@ -94,13 +116,26 @@ const VALID_PAYLOAD = {
   transport_cost: "R301-R600",
   food_cost: "R501-R1000",
   comment: "",
+  turnstileToken: "valid-turnstile-token",
 };
+
+const REQUEST_OVERSIZE_BYTES = 17 * 1024;
 
 // ---------------------------------------------------------------------------
 // Import the module under test
 // ---------------------------------------------------------------------------
 
 // Dynamic import so we can run after stubs are defined.
+let turnstileSuccess = true;
+
+before(() => {
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: turnstileSuccess }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+});
+
 const { handleSubmit } = await import("./submit.js");
 
 // ---------------------------------------------------------------------------
@@ -134,6 +169,17 @@ describe("handleSubmit", () => {
     });
   });
 
+  describe("when TURNSTILE_SECRET_KEY is missing", () => {
+    it("returns 503 Service unavailable", async () => {
+      const req = makeRequest(VALID_PAYLOAD);
+      const env = makeEnv({ TURNSTILE_SECRET_KEY: undefined });
+      const res = await handleSubmit(req, env);
+      assert.equal(res.status, 503);
+      const body = await res.json();
+      assert.equal(body.error, "Service unavailable.");
+    });
+  });
+
   // -------------------------------------------------------------------------
   // HTTP method
   // -------------------------------------------------------------------------
@@ -159,6 +205,7 @@ describe("handleSubmit", () => {
 
   describe("validation", () => {
     it("accepts a valid payload and returns 201", async () => {
+      turnstileSuccess = true;
       const req = makeRequest(VALID_PAYLOAD);
       const env = makeEnv();
       const res = await handleSubmit(req, env);
@@ -191,8 +238,7 @@ describe("handleSubmit", () => {
       const res = await handleSubmit(req, env);
       assert.equal(res.status, 400);
       const body = await res.json();
-      assert.equal(body.error, "Validation failed.");
-      assert.ok(Array.isArray(body.details) && body.details.length > 0);
+      assert.equal(body.error, "Invalid submission.");
     });
 
     it("returns 400 when cut_back_on is empty", async () => {
@@ -202,7 +248,7 @@ describe("handleSubmit", () => {
       const res = await handleSubmit(req, env);
       assert.equal(res.status, 400);
       const body = await res.json();
-      assert.ok(body.details.some((d) => /cut back on/i.test(d)));
+      assert.equal(body.error, "Invalid submission.");
     });
 
     it("returns 400 when a rating is out of range", async () => {
@@ -212,7 +258,7 @@ describe("handleSubmit", () => {
       const res = await handleSubmit(req, env);
       assert.equal(res.status, 400);
       const body = await res.json();
-      assert.ok(body.details.some((d) => /work worry rating/i.test(d)));
+      assert.equal(body.error, "Invalid submission.");
     });
 
     it("returns 400 when comment exceeds 500 characters", async () => {
@@ -222,7 +268,7 @@ describe("handleSubmit", () => {
       const res = await handleSubmit(req, env);
       assert.equal(res.status, 400);
       const body = await res.json();
-      assert.ok(body.details.some((d) => /500/i.test(d)));
+      assert.equal(body.error, "Invalid submission.");
     });
 
     it("accepts a comment of exactly 500 characters", async () => {
@@ -241,6 +287,27 @@ describe("handleSubmit", () => {
       assert.equal(res.status, 400);
     });
 
+    it("returns 400 when the Turnstile token is missing", async () => {
+      const { turnstileToken: _omit, ...payload } = VALID_PAYLOAD;
+      const req = makeRequest(payload);
+      const env = makeEnv();
+      const res = await handleSubmit(req, env);
+      assert.equal(res.status, 400);
+      const body = await res.json();
+      assert.equal(body.error, "Invalid submission.");
+    });
+
+    it("returns 400 when Turnstile verification fails", async () => {
+      turnstileSuccess = false;
+      const req = makeRequest(VALID_PAYLOAD);
+      const env = makeEnv();
+      const res = await handleSubmit(req, env);
+      turnstileSuccess = true;
+      assert.equal(res.status, 400);
+      const body = await res.json();
+      assert.equal(body.error, "Spam check failed.");
+    });
+
     it("returns 400 for invalid JSON body", async () => {
       const req = makeRequest("not-json", {
         headers: { "Content-Type": "application/json", "User-Agent": "TestAgent/1.0" },
@@ -248,6 +315,41 @@ describe("handleSubmit", () => {
       const env = makeEnv();
       const res = await handleSubmit(req, env);
       assert.equal(res.status, 400);
+    });
+
+    it("returns 413 for an oversized body", async () => {
+      const req = makeRequest("x".repeat(REQUEST_OVERSIZE_BYTES), {
+        headers: { "Content-Type": "application/json", "User-Agent": "TestAgent/1.0" },
+      });
+      const env = makeEnv();
+      const res = await handleSubmit(req, env);
+      assert.equal(res.status, 413);
+      const body = await res.json();
+      assert.equal(body.error, "Request too large.");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Rate limiting
+  // -------------------------------------------------------------------------
+
+  describe("rate limiting", () => {
+    it("returns 429 after more than three submissions from the same hashed IP in an hour", async () => {
+      const env = makeEnv();
+      const headers = {
+        "CF-Connecting-IP": "203.0.113.10",
+        "User-Agent": "RateLimitAgent/1.0",
+      };
+
+      for (let index = 0; index < 3; index += 1) {
+        const res = await handleSubmit(makeRequest(VALID_PAYLOAD, { headers }), env);
+        assert.notEqual(res.status, 429);
+      }
+
+      const limited = await handleSubmit(makeRequest(VALID_PAYLOAD, { headers }), env);
+      assert.equal(limited.status, 429);
+      const body = await limited.json();
+      assert.equal(body.error, "Too many submissions.");
     });
   });
 

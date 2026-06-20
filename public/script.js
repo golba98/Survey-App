@@ -14,13 +14,18 @@
     const formError = document.getElementById('form-error');
     const commentTextarea = document.getElementById('comment');
     const charCount = document.getElementById('char-count');
+    const turnstileContainer = document.getElementById('turnstile-widget');
 
     // Storage key for duplicate prevention
     const STORAGE_KEY = 'survey_submitted_sa_economy';
 
     // Worker API endpoint
     const API_SUBMIT_URL = '/submit';
+    const API_CONFIG_URL = '/config';
     const COMMENT_MAX_LENGTH = 500;
+    let turnstileWidgetId = null;
+    let turnstileToken = null;
+    let turnstileReady = false;
 
     // ========================================
     // Initialize
@@ -51,6 +56,9 @@
 
         // Real-time validation feedback
         setupRealTimeValidation();
+
+        // Turnstile anti-spam widget
+        initializeTurnstile();
     }
 
     // ========================================
@@ -194,6 +202,15 @@
             formError.textContent = '';
         }
 
+        if (!turnstileReady || !turnstileToken) {
+            if (formError) {
+                formError.textContent = turnstileReady
+                    ? 'Please complete the anti-spam check before submitting.'
+                    : 'The anti-spam check is still loading. Please try again in a moment.';
+            }
+            isValid = false;
+        }
+
         return isValid;
     }
 
@@ -233,7 +250,8 @@
             income_keeps_up_rating: getRadioValue('income_keeps_up_rating'),
             transport_cost: getRadioValue('transport_cost'),
             food_cost: getRadioValue('food_cost'),
-            comment: commentTextarea ? commentTextarea.value.trim() : null
+            comment: commentTextarea ? commentTextarea.value.trim() : null,
+            turnstileToken
         };
     }
 
@@ -267,12 +285,7 @@
         })
         .then(response => {
             if (!response.ok) {
-                return response.json().then(err => {
-                    const detail = Array.isArray(err.details) && err.details.length > 0
-                        ? err.details[0]
-                        : null;
-
-                    // Distinguish server-configuration failures from user errors
+                return response.json().catch(() => ({})).then(err => {
                     if (response.status === 503) {
                         throw new Error(
                             'The survey service is temporarily unavailable. ' +
@@ -280,19 +293,15 @@
                         );
                     }
 
-                    throw new Error(detail || err.error || err.message || 'Submission failed. Please try again.');
-                }).catch(parseErr => {
-                    // Response body was not JSON (e.g., network-level error page)
-                    if (parseErr instanceof SyntaxError) {
-                        if (response.status === 503) {
-                            throw new Error(
-                                'The survey service is temporarily unavailable. ' +
-                                'Please try again in a few minutes.'
-                            );
-                        }
-                        throw new Error(`Submission failed (HTTP ${response.status}). Please try again.`);
+                    if (response.status === 429) {
+                        throw new Error('Too many submissions. Please try again later.');
                     }
-                    throw parseErr;
+
+                    if (response.status === 413) {
+                        throw new Error('The submission is too large. Please shorten your comment and try again.');
+                    }
+
+                    throw new Error(err.error || 'Submission failed. Please check your answers and try again.');
                 });
             }
             return response.json();
@@ -319,7 +328,93 @@
 
             // Re-enable submit button so the user can try again
             setSubmitButtonState(false);
+            resetTurnstile();
         });
+    }
+
+    // ========================================
+    // Turnstile
+    // ========================================
+    function initializeTurnstile() {
+        if (!turnstileContainer) return;
+
+        fetch(API_CONFIG_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'omit'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Unable to load anti-spam check.');
+            }
+            return response.json();
+        })
+        .then(config => waitForTurnstile().then(() => config))
+        .then(config => {
+            if (!config.turnstileSiteKey) {
+                throw new Error('Anti-spam check is not configured.');
+            }
+
+            turnstileWidgetId = window.turnstile.render(turnstileContainer, {
+                sitekey: config.turnstileSiteKey,
+                callback: token => {
+                    turnstileToken = token;
+                    turnstileReady = true;
+                    if (formError && formError.textContent.includes('anti-spam')) {
+                        formError.textContent = '';
+                    }
+                },
+                'expired-callback': () => {
+                    turnstileToken = null;
+                },
+                'error-callback': () => {
+                    turnstileToken = null;
+                    turnstileReady = true;
+                    if (formError) {
+                        formError.textContent = 'The anti-spam check failed. Please try again.';
+                    }
+                }
+            });
+            turnstileReady = true;
+        })
+        .catch(error => {
+            console.error('Turnstile setup error:', error);
+            turnstileReady = false;
+            if (formError) {
+                formError.textContent = 'The anti-spam check could not load. Please refresh the page.';
+            }
+        });
+    }
+
+    function waitForTurnstile() {
+        return new Promise((resolve, reject) => {
+            const startedAt = Date.now();
+
+            function check() {
+                if (window.turnstile && typeof window.turnstile.render === 'function') {
+                    resolve();
+                    return;
+                }
+
+                if (Date.now() - startedAt > 5000) {
+                    reject(new Error('Turnstile script timed out.'));
+                    return;
+                }
+
+                window.setTimeout(check, 100);
+            }
+
+            check();
+        });
+    }
+
+    function resetTurnstile() {
+        turnstileToken = null;
+        if (window.turnstile && turnstileWidgetId !== null) {
+            window.turnstile.reset(turnstileWidgetId);
+        }
     }
 
     // ========================================
