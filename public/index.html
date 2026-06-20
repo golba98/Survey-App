@@ -405,6 +405,8 @@
                     
                     <!-- General form error -->
                     <div class="error-message general-error" id="form-error" role="alert"></div>
+
+                    <div id="turnstile-widget" class="turnstile-widget"></div>
                     
                     <button 
                         type="submit" 
@@ -429,6 +431,7 @@
         </footer>
     </div>
 
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     <script src="script.js"></script>
 </body>
 </html>

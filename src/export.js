@@ -1,6 +1,5 @@
 import {
   jsonResponse,
-  optionsResponse,
   rejectDisallowedOrigin,
   serverError,
   serviceUnavailable,
@@ -25,16 +24,12 @@ const EXPORT_COLUMNS = [
 export async function handleExport(request, env) {
   const allowCors = false;
 
-  if (request.method === "OPTIONS") {
-    return optionsResponse(request, env, ["GET", "OPTIONS"], allowCors);
-  }
-
   if (request.method !== "GET") {
-    return jsonResponse({ error: "Method not allowed. Use GET /export." }, 405, {
+    return jsonResponse({ error: "Method not allowed." }, 405, {
       request,
       env,
       allowCors,
-      extraHeaders: { Allow: "GET, OPTIONS" },
+      extraHeaders: { Allow: "GET" },
     });
   }
 
@@ -44,18 +39,19 @@ export async function handleExport(request, env) {
   }
 
   if (!env.DB) {
-    return serviceUnavailable("Missing D1 binding for export handler.", request, env, { allowCors });
+    console.error("[export] D1 binding is not configured.", { path: new URL(request.url).pathname });
+    return serviceUnavailable("Export service unavailable.", request, env, { allowCors });
   }
 
   if (!env.EXPORT_TOKEN) {
-    return serviceUnavailable("Missing EXPORT_TOKEN for export handler.", request, env, { allowCors });
+    console.error("[export] Export token is not configured.", { path: new URL(request.url).pathname });
+    return serviceUnavailable("Export service unavailable.", request, env, { allowCors });
   }
 
   try {
     const url = new URL(request.url);
-    const providedToken = url.searchParams.get("token");
 
-    if (!providedToken || providedToken !== env.EXPORT_TOKEN) {
+    if (url.searchParams.has("token") || !isAuthorizedExportRequest(request, env.EXPORT_TOKEN)) {
       return jsonResponse({ error: "Unauthorized." }, 401, {
         request,
         env,
@@ -102,6 +98,16 @@ export async function handleExport(request, env) {
   } catch (error) {
     return serverError("Export handler failed.", error, request, env, { allowCors });
   }
+}
+
+function isAuthorizedExportRequest(request, expectedToken) {
+  const authorization = request.headers.get("Authorization");
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const providedToken = authorization.slice("Bearer ".length).trim();
+  return providedToken !== "" && providedToken === expectedToken;
 }
 
 function buildExportStatement(db, start, end) {
@@ -184,7 +190,10 @@ function escapeCsvValue(value) {
     return "";
   }
 
-  const stringValue = String(value);
+  let stringValue = String(value);
+  if (/^[=+\-@]/.test(stringValue)) {
+    stringValue = `'${stringValue}`;
+  }
 
   if (/[",\n\r]/.test(stringValue)) {
     return `"${stringValue.replace(/"/g, '""')}"`;

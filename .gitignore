@@ -1,7 +1,15 @@
 node_modules/
 .wrangler/
 .env
+.env.*
 .dev.vars
+*.local
+exports/
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+*.dump
 *.log
 logs/
 npm-debug.log*

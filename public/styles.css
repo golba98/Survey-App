@@ -723,6 +723,13 @@ body {
     color:         var(--color-off-white-soft);
 }
 
+.turnstile-widget {
+    display:         flex;
+    justify-content: center;
+    margin:          var(--sp-md) 0;
+    min-height:      65px;
+}
+
 .submit-button {
     display:          inline-flex;
     align-items:      center;

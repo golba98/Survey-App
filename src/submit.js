@@ -1,6 +1,5 @@
 import {
   jsonResponse,
-  optionsResponse,
   rejectDisallowedOrigin,
   serverError,
   serviceUnavailable,
@@ -27,26 +26,25 @@ const ACCEPTED_FIELDS = [
   "transport_cost",
   "food_cost",
   "comment",
+  "turnstileToken",
 ];
 
-const THROTTLE_WINDOW_SECONDS = 60;
-const THROTTLE_MAX_ATTEMPTS = 3;
+const REQUEST_MAX_BYTES = 16 * 1024;
+const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
+const RATE_LIMIT_MAX_SUBMISSIONS = 3;
+const RATE_LIMIT_RETENTION_SECONDS = 24 * 60 * 60;
 const USER_AGENT_MAX_LENGTH = 255;
 const COMMENT_MAX_LENGTH = 500;
 
 export async function handleSubmit(request, env) {
   const allowCors = true;
 
-  if (request.method === "OPTIONS") {
-    return optionsResponse(request, env, ["POST", "OPTIONS"], allowCors);
-  }
-
   if (request.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed. Use POST /submit." }, 405, {
+    return jsonResponse({ error: "Method not allowed." }, 405, {
       request,
       env,
       allowCors,
-      extraHeaders: { Allow: "POST, OPTIONS" },
+      extraHeaders: { Allow: "POST" },
     });
   }
 
@@ -56,46 +54,35 @@ export async function handleSubmit(request, env) {
   }
 
   if (!env.DB) {
-    // The D1 database binding is missing from wrangler.toml / dashboard settings.
-    // Check: Workers & Pages → survey-app → Settings → Bindings → D1 database (DB).
-    console.error("[submit] D1 binding \"DB\" is not configured.", {
-      path: new URL(request.url).pathname,
-    });
-    return serviceUnavailable("Missing D1 binding for submit handler.", request, env, { allowCors });
+    console.error("[submit] D1 binding is not configured.", { path: new URL(request.url).pathname });
+    return serviceUnavailable("Submit service unavailable.", request, env, { allowCors });
   }
 
   if (!env.IP_HASH_SECRET) {
-    // The IP_HASH_SECRET secret is missing from the environment.
-    // Local dev: create a .dev.vars file with IP_HASH_SECRET=<any-string>.
-    // Production: npx wrangler secret put IP_HASH_SECRET
-    console.error("[submit] Secret \"IP_HASH_SECRET\" is not set.", {
-      path: new URL(request.url).pathname,
-      hint: "Create .dev.vars locally or run: npx wrangler secret put IP_HASH_SECRET",
-    });
-    return serviceUnavailable("Missing IP_HASH_SECRET for submit handler.", request, env, { allowCors });
+    console.error("[submit] IP hash secret is not configured.", { path: new URL(request.url).pathname });
+    return serviceUnavailable("Submit service unavailable.", request, env, { allowCors });
   }
 
-  let payload;
+  if (!env.TURNSTILE_SECRET_KEY) {
+    console.error("[submit] Turnstile secret is not configured.", { path: new URL(request.url).pathname });
+    return serviceUnavailable("Submit service unavailable.", request, env, { allowCors });
+  }
 
-  try {
-    payload = await request.json();
-  } catch {
-    return jsonResponse({ error: "Request body must be valid JSON." }, 400, {
+  const parsedBody = await parseJsonBody(request);
+  if (!parsedBody.ok) {
+    return jsonResponse({ error: parsedBody.status === 413 ? "Request too large." : "Invalid submission." }, parsedBody.status, {
       request,
       env,
       allowCors,
     });
   }
 
+  const payload = parsedBody.value;
   const errors = [];
   const normalizedPayload = normalizePayload(payload, errors);
   if (errors.length > 0) {
-    // Log field names only – not the submitted values – to avoid logging user data.
-    console.warn("[submit] Validation failed.", {
-      errorCount: errors.length,
-      errors,
-    });
-    return jsonResponse({ error: "Validation failed.", details: errors }, 400, {
+    console.warn("[submit] Validation failed.", { errorCount: errors.length });
+    return jsonResponse({ error: "Invalid submission." }, 400, {
       request,
       env,
       allowCors,
@@ -104,17 +91,31 @@ export async function handleSubmit(request, env) {
 
   const userAgent = normalizeUserAgent(request.headers.get("User-Agent"));
   const ipHash = await hashIpAddress(request, env.IP_HASH_SECRET);
-  const throttleKey = `${ipHash}:${userAgent}`;
 
   try {
-    const throttleState = await checkAndUpdateThrottle(env.DB, throttleKey);
-    if (throttleState.blocked) {
-      console.warn("[submit] Throttle limit reached.", { throttleKey });
+    await cleanupOldRateLimitRows(env.DB);
+    const rateLimitState = await checkAndUpdateRateLimit(env.DB, ipHash);
+    if (rateLimitState.blocked) {
+      console.warn("[submit] Rate limit reached.", { ipHash });
       return jsonResponse(
-        { error: "Too many attempts. Please wait a minute before trying again." },
+        { error: "Too many submissions." },
         429,
         { request, env, allowCors },
       );
+    }
+
+    const turnstileResult = await verifyTurnstileToken(
+      normalizedPayload.turnstileToken,
+      env.TURNSTILE_SECRET_KEY,
+      getRequesterIp(request),
+    );
+    if (!turnstileResult) {
+      console.warn("[submit] Turnstile verification failed.");
+      return jsonResponse({ error: "Spam check failed." }, 400, {
+        request,
+        env,
+        allowCors,
+      });
     }
 
     const duplicate = await env.DB.prepare(
@@ -166,10 +167,8 @@ export async function handleSubmit(request, env) {
         )
         .run();
     } catch (dbError) {
-      // Log DB insert failure without exposing user-submitted values.
       console.error("[submit] D1 insert failed.", {
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        table: "survey_responses",
+        errorType: dbError instanceof Error ? dbError.name : typeof dbError,
       });
       return serverError("Database insert failed.", dbError, request, env, { allowCors });
     }
@@ -187,9 +186,57 @@ export async function handleSubmit(request, env) {
     );
   } catch (error) {
     console.error("[submit] Unexpected error in submit handler.", {
-      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.name : typeof error,
     });
     return serverError("Submit handler failed.", error, request, env, { allowCors });
+  }
+}
+
+async function parseJsonBody(request) {
+  const contentLength = request.headers.get("Content-Length");
+  if (contentLength) {
+    const numericContentLength = Number(contentLength);
+    if (!Number.isFinite(numericContentLength) || numericContentLength > REQUEST_MAX_BYTES) {
+      return { ok: false, status: 413 };
+    }
+  }
+
+  const bodyResult = await readBodyWithLimit(request, REQUEST_MAX_BYTES);
+  if (!bodyResult.ok) {
+    return { ok: false, status: 413 };
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(bodyResult.text) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
+
+async function readBodyWithLimit(request, maxBytes) {
+  if (!request.body) {
+    return { ok: true, text: "" };
+  }
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      text += decoder.decode();
+      return { ok: true, text };
+    }
+
+    bytesRead += value.byteLength;
+    if (bytesRead > maxBytes) {
+      await reader.cancel();
+      return { ok: false };
+    }
+
+    text += decoder.decode(value, { stream: true });
   }
 }
 
@@ -215,6 +262,7 @@ function normalizePayload(payload, errors) {
     income_keeps_up_rating: normalizeRating(payload.income_keeps_up_rating),
     cut_back_on: normalizeCutBackOn(payload.cut_back_on, errors),
     comment: normalizeComment(payload.comment, errors),
+    turnstileToken: normalizeTurnstileToken(payload.turnstileToken, errors),
   };
 
   validateChoice(errors, normalized.age_range, "Age range", VALID_OPTIONS.age_range);
@@ -290,15 +338,34 @@ function normalizeComment(comment, errors) {
   return trimmed === "" ? null : trimmed;
 }
 
+function normalizeTurnstileToken(value, errors) {
+  if (typeof value !== "string") {
+    errors.push("Turnstile token is required.");
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    errors.push("Turnstile token is required.");
+    return null;
+  }
+
+  return trimmed;
+}
+
 async function hashIpAddress(request, secret) {
-  const ipAddress =
-    request.headers.get("CF-Connecting-IP") ||
-    request.headers.get("X-Forwarded-For") ||
-    "unknown";
+  const ipAddress = getRequesterIp(request);
   const data = new TextEncoder().encode(`${secret}:${ipAddress}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
 
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function getRequesterIp(request) {
+  const forwardedFor = request.headers.get("X-Forwarded-For");
+  const firstForwardedIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "";
+
+  return request.headers.get("CF-Connecting-IP") || firstForwardedIp || "unknown";
 }
 
 function normalizeUserAgent(value) {
@@ -309,18 +376,52 @@ function normalizeUserAgent(value) {
   return value.trim().replace(/\s+/g, " ").slice(0, USER_AGENT_MAX_LENGTH);
 }
 
-async function checkAndUpdateThrottle(db, throttleKey) {
+async function verifyTurnstileToken(token, secretKey, remoteIp) {
+  const body = new FormData();
+  body.set("secret", secretKey);
+  body.set("response", token);
+  if (remoteIp && remoteIp !== "unknown") {
+    body.set("remoteip", remoteIp);
+  }
+
+  try {
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body,
+    });
+
+    if (!response.ok) {
+      console.warn("[submit] Turnstile Siteverify returned a non-OK response.", { status: response.status });
+      return false;
+    }
+
+    const result = await response.json();
+    return result?.success === true;
+  } catch (error) {
+    console.error("[submit] Turnstile Siteverify request failed.", {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+    return false;
+  }
+}
+
+async function cleanupOldRateLimitRows(db) {
+  const cutoff = Math.floor(Date.now() / 1000) - RATE_LIMIT_RETENTION_SECONDS;
+  await db.prepare("DELETE FROM submission_throttle WHERE last_seen_at < ?").bind(cutoff).run();
+}
+
+async function checkAndUpdateRateLimit(db, ipHash) {
   const now = Math.floor(Date.now() / 1000);
   const existing = await db.prepare(
     "SELECT window_started_at, attempt_count FROM submission_throttle WHERE throttle_key = ? LIMIT 1",
   )
-    .bind(throttleKey)
+    .bind(ipHash)
     .first();
 
   const withinWindow =
     existing &&
     Number.isInteger(existing.window_started_at) &&
-    now - existing.window_started_at < THROTTLE_WINDOW_SECONDS;
+    now - existing.window_started_at < RATE_LIMIT_WINDOW_SECONDS;
   const attemptCount = withinWindow ? existing.attempt_count + 1 : 1;
 
   await db.prepare(
@@ -331,10 +432,10 @@ async function checkAndUpdateThrottle(db, throttleKey) {
        attempt_count = excluded.attempt_count,
        last_seen_at = excluded.last_seen_at`,
   )
-    .bind(throttleKey, withinWindow ? existing.window_started_at : now, attemptCount, now)
+    .bind(ipHash, withinWindow ? existing.window_started_at : now, attemptCount, now)
     .run();
 
   return {
-    blocked: withinWindow && attemptCount > THROTTLE_MAX_ATTEMPTS,
+    blocked: withinWindow && attemptCount > RATE_LIMIT_MAX_SUBMISSIONS,
   };
 }

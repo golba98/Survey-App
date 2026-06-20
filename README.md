@@ -91,6 +91,8 @@ Create a `.dev.vars` file that is not committed:
 cat > .dev.vars <<'EOF'
 EXPORT_TOKEN=replace-with-a-local-export-token
 IP_HASH_SECRET=replace-with-a-local-ip-hash-secret
+TURNSTILE_SITE_KEY=replace-with-a-local-turnstile-site-key
+TURNSTILE_SECRET_KEY=replace-with-a-local-turnstile-secret-key
 ALLOWED_ORIGINS=http://localhost:8787,http://127.0.0.1:8787
 EOF
 ```
@@ -98,7 +100,15 @@ EOF
 Required secrets:
 
 - `EXPORT_TOKEN`: required to access `/export`
-- `IP_HASH_SECRET`: used to salt the stored IP hash for duplicate prevention
+- `IP_HASH_SECRET`: used to salt the stored IP hash for duplicate prevention and rate limiting
+- `TURNSTILE_SECRET_KEY`: verifies Cloudflare Turnstile responses server-side
+
+Required public variable:
+
+- `TURNSTILE_SITE_KEY`: public Turnstile site key returned by `GET /config` for the browser widget
+
+Optional variable:
+
 - `ALLOWED_ORIGINS` (optional): comma-separated browser origins if you need to allow cross-origin requests beyond same-origin and local development
 
 ### 5. Apply the schema
@@ -149,15 +159,25 @@ Add these secrets:
 
 - `EXPORT_TOKEN`
 - `IP_HASH_SECRET`
-- `ALLOWED_ORIGINS` (optional)
+- `TURNSTILE_SECRET_KEY`
 
 Set them with:
 
 ```bash
 npx wrangler secret put EXPORT_TOKEN
 npx wrangler secret put IP_HASH_SECRET
-npx wrangler secret put ALLOWED_ORIGINS
+npx wrangler secret put TURNSTILE_SECRET_KEY
 ```
+
+Set this public variable:
+
+- `TURNSTILE_SITE_KEY`: public Turnstile site key returned by `GET /config`
+
+`TURNSTILE_SITE_KEY` is safe for browsers to see, but do not put it directly in `public/`.
+
+Optional plain variable:
+
+- `ALLOWED_ORIGINS`: comma-separated browser origins if you need cross-origin requests beyond same-origin and local development
 
 ### D1 binding
 
@@ -180,10 +200,22 @@ Do not hardcode secrets in source files.
 
 - `EXPORT_TOKEN`
   - Used by `/export`
-  - Pass it as the `token` query parameter
+  - Send it only in the `Authorization: Bearer ...` header
 - `IP_HASH_SECRET`
-  - Used to salt the duplicate-prevention IP hash
+  - Used to salt the duplicate-prevention and rate-limit IP hash
   - Must be set in every environment where submissions are accepted
+- `TURNSTILE_SECRET_KEY`
+  - Used by `/submit` to verify Cloudflare Turnstile tokens server-side
+  - Must never be sent to the browser
+
+## Required Public Variables
+
+- `TURNSTILE_SITE_KEY`
+  - Public Turnstile site key for the browser widget
+  - Served by the Worker from `GET /config`
+
+## Optional Variables
+
 - `ALLOWED_ORIGINS`
   - Optional allowlist for browser CORS
   - Format: comma-separated origins such as `https://example.com,https://admin.example.com`
@@ -193,6 +225,9 @@ Do not hardcode secrets in source files.
 - No names, phone numbers, emails, exact addresses, or ID numbers are collected
 - Raw IP addresses are never stored; only a salted hash is kept for duplicate and spam protection
 - `/export` requires the `EXPORT_TOKEN` secret and does not expose data publicly
+- `/export` rejects query-string tokens and requires a bearer token header
+- `/submit` verifies Turnstile server-side before saving a response
+- `/submit` rate limits by salted IP hash only; raw IP addresses are never stored
 - D1 queries use prepared statements only
 - Survey data should only be reported in grouped, anonymous form
 - Comments are stored as plain text and are never rendered as HTML
@@ -205,21 +240,44 @@ Route:
 GET /export
 ```
 
-Example URLs:
+Use an Authorization header. Do not put `EXPORT_TOKEN` in a query string.
 
-```text
-/export?format=json&token=YOUR_TOKEN
-/export?format=csv&token=YOUR_TOKEN
+```bash
+curl -H "Authorization: Bearer $EXPORT_TOKEN" \
+  "http://localhost:8787/export?format=json"
+
+mkdir -p exports
+curl -H "Authorization: Bearer $EXPORT_TOKEN" \
+  "http://localhost:8787/export?format=csv" \
+  -o exports/survey-export.csv
 ```
 
 Query parameters:
 
-- `token`: required
 - `format`: `json` or `csv`, default `json`
 - `start`: optional `YYYY-MM-DD`
 - `end`: optional `YYYY-MM-DD`
 
-The export only includes survey response fields and excludes internal duplicate-prevention data.
+The export only includes survey response fields and excludes internal duplicate-prevention data. CSV cells are escaped for spreadsheet use, including prefixing formula-leading values such as `=`, `+`, `-`, and `@`.
+
+## Testing `/submit` Locally
+
+Turnstile requires a valid browser-issued token for normal submits. For manual browser testing:
+
+1. Set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` in `.dev.vars`.
+2. Run `npm run db:apply:local`.
+3. Run `npm run dev`.
+4. Open `http://localhost:8787`, complete the Turnstile widget, and submit the form.
+
+For API-level invalid payload checks:
+
+```bash
+curl -i -X POST "http://localhost:8787/submit" \
+  -H "Content-Type: application/json" \
+  --data '{"bad":"field"}'
+```
+
+That should return `400` with a generic error.
 
 ## Local Test Checklist
 
@@ -232,14 +290,16 @@ npm run dev
 
 Then verify:
 
-- Open the local Worker URL
-- Submit a valid response and confirm the frontend posts to `/submit`
-- Confirm successful submission redirects to `/success.html`
-- Confirm `/export?format=json&token=YOUR_LOCAL_TOKEN` returns JSON
-- Confirm `/export?format=csv&token=YOUR_LOCAL_TOKEN` returns CSV
-- Confirm an invalid export token returns `401`
-- Confirm duplicate submission protection blocks the second submission
-- Confirm repeated attempts quickly trigger throttling without storing raw IP addresses
+- Valid survey submit works and redirects to `/success.html`
+- Invalid survey field is rejected with `400`
+- Missing Turnstile token is rejected
+- Repeated submissions from the same requester get `429`
+- `/export` without an `Authorization` header returns `401`
+- `/export` with the wrong bearer token returns `401`
+- `/export` with `Authorization: Bearer $EXPORT_TOKEN` returns JSON or CSV data
+- Query-string token access, such as `/export?token=...`, returns `401`
+- No secrets appear in `public/`, browser devtools, built assets, or committed files
+- Raw IP addresses are not stored in D1; only salted hashes are stored
 
 ## Cloudflare Retry Steps
 
@@ -254,6 +314,8 @@ Then verify:
 5. Open `Settings → Variables and Secrets` and confirm:
    - `EXPORT_TOKEN`
    - `IP_HASH_SECRET`
+   - `TURNSTILE_SECRET_KEY`
+   - `TURNSTILE_SITE_KEY`
    - optional `ALLOWED_ORIGINS`
 6. Open `Settings → Bindings` and confirm:
    - `DB → 25-survey-app-db`

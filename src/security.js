@@ -1,8 +1,7 @@
 const BASE_RESPONSE_HEADERS = {
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
-  "Permissions-Policy":
-    "accelerometer=(), autoplay=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), browsing-topics=()",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
 const API_RESPONSE_HEADERS = {
@@ -13,7 +12,7 @@ const API_RESPONSE_HEADERS = {
 const STATIC_ASSET_HEADERS = {
   ...BASE_RESPONSE_HEADERS,
   "Content-Security-Policy":
-    "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+    "default-src 'self'; base-uri 'self'; connect-src 'self' https://challenges.cloudflare.com; font-src 'self'; frame-ancestors 'none'; frame-src https://challenges.cloudflare.com; img-src 'self' data:; object-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; form-action 'self'",
 };
 
 const DEFAULT_DEV_ORIGINS = new Set([
@@ -96,7 +95,7 @@ export function rejectDisallowedOrigin(request, env, allowCors = false) {
 export function serverError(message, error, request, env, options = {}) {
   const { allowCors = false } = options;
   console.error(message, {
-    error: error instanceof Error ? error.message : String(error),
+    errorType: error instanceof Error ? error.name : typeof error,
     path: request?.url,
     method: request?.method,
   });
