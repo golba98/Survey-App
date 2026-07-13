@@ -10,6 +10,8 @@
     "db:create": "wrangler d1 create 25-survey-app-db",
     "db:apply": "wrangler d1 execute 25-survey-app-db --remote --file=schema.sql",
     "db:apply:local": "wrangler d1 execute DB --local --file=schema.sql",
+    "seed:synthetic:dry-run": "node scripts/seed-synthetic-responses.mjs",
+    "seed:synthetic": "node scripts/seed-synthetic-responses.mjs --apply",
     "test": "node --test src/**/*.test.js"
   },
   "keywords": [
