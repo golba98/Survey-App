@@ -1,4 +1,4 @@
--- Canonical schema for new local/dev databases.
+-- Baseline schema for existing deployments and fresh migration-based databases.
 CREATE TABLE IF NOT EXISTS survey_responses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -6,15 +6,20 @@ CREATE TABLE IF NOT EXISTS survey_responses (
     status TEXT NOT NULL CHECK (status IN ('Student', 'Employed', 'Unemployed', 'Studying and working')),
     main_pressure TEXT NOT NULL CHECK (main_pressure IN ('Food', 'Transport', 'Rent', 'Electricity', 'Data', 'Tuition', 'Debt')),
     cost_increased TEXT NOT NULL CHECK (cost_increased IN ('Yes', 'No', 'Not sure')),
-    cut_back_on TEXT NOT NULL CHECK (json_valid(cut_back_on) AND json_type(cut_back_on) = 'array'),
+    cut_back_on TEXT NOT NULL,
     work_worry_rating INTEGER NOT NULL CHECK (work_worry_rating BETWEEN 1 AND 5),
     income_keeps_up_rating INTEGER NOT NULL CHECK (income_keeps_up_rating BETWEEN 1 AND 5),
     transport_cost TEXT NOT NULL CHECK (transport_cost IN ('R0-R300', 'R301-R600', 'R601-R1000', 'R1001-R1500', 'R1500+')),
     food_cost TEXT NOT NULL CHECK (food_cost IN ('R0-R500', 'R501-R1000', 'R1001-R2000', 'R2001-R3000', 'R3000+')),
-    comment TEXT CHECK (comment IS NULL OR length(comment) <= 500)
+    comment TEXT CHECK (comment IS NULL OR length(comment) <= 500),
+    ip_hash TEXT NOT NULL,
+    user_agent TEXT NOT NULL CHECK (length(user_agent) <= 255),
+    CHECK (json_valid(cut_back_on)),
+    CHECK (json_type(cut_back_on) = 'array')
 );
 
 CREATE INDEX IF NOT EXISTS idx_survey_responses_timestamp ON survey_responses(timestamp);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_survey_responses_duplicate_guard ON survey_responses(ip_hash, user_agent);
 
 CREATE TABLE IF NOT EXISTS submission_throttle (
     throttle_key TEXT PRIMARY KEY,
@@ -22,6 +27,3 @@ CREATE TABLE IF NOT EXISTS submission_throttle (
     attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
     last_seen_at INTEGER NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_submission_throttle_last_seen
-    ON submission_throttle(last_seen_at);

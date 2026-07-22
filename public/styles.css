@@ -726,8 +726,21 @@ body {
 .turnstile-widget {
     display:         flex;
     justify-content: center;
-    margin:          var(--sp-md) 0;
-    min-height:      65px;
+    margin:          0;
+}
+
+.already-submitted-card {
+    padding:    var(--sp-xl);
+    text-align: center;
+}
+
+.already-submitted-card h2 {
+    color:         var(--color-off-white);
+    margin-bottom: var(--sp-sm);
+}
+
+.already-submitted-card p {
+    color: var(--color-off-white-soft);
 }
 
 .submit-button {

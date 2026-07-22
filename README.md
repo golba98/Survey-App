@@ -1,167 +1,98 @@
-# survey-app
+# Survey App
 
-“Putting the South African Economy Into Perspective” is a Cloudflare Worker + static assets + D1 survey app for collecting anonymous grouped responses about cost of living and economic pressure in South Africa.
+“Putting the South African Economy Into Perspective” is a Cloudflare Worker, static site, and D1 survey for grouped analysis of South African cost-of-living experiences.
 
-## Project Description
+## Architecture
 
-- Frontend: plain HTML, CSS, and JavaScript in `public/`
-- Backend: Cloudflare Worker in `src/`
-- Database: Cloudflare D1 bound as `DB`
-- Privacy: no names, phone numbers, emails, exact addresses, or ID numbers are collected
-- Duplicate prevention: uses a salted IP hash only; raw IP addresses are never stored
+- `public/`: accessible HTML, CSS, and browser-side validation
+- `src/`: Worker routing, security headers, Turnstile verification, submission, and protected export
+- `schema.sql`: canonical schema for new local databases
+- `migrations/`: ordered D1 production migrations
+- `wrangler.jsonc`: Worker, assets, public configuration, observability, and the existing `DB` binding
 
-## File Structure
+The application keeps the existing Cloudflare identities:
 
-```text
-25-survey-app/
-├── public/
-│   ├── index.html
-│   ├── success.html
-│   ├── styles.css
-│   └── script.js
-├── src/
-│   ├── export.js
-│   ├── index.js
-│   ├── security.js
-│   └── submit.js
-├── schema.sql
-├── wrangler.toml
-├── package.json
-└── README.md
-```
+- Worker: `survey-app`
+- D1 database: `25-survey-app-db`
+- D1 binding: `DB`
 
-- `public/index.html`: main survey form
-- `public/success.html`: thank-you page after a successful submit
-- `public/styles.css`: shared styling
-- `public/script.js`: browser-side validation and form submission to `/submit`
-- `src/index.js`: Worker entrypoint and request router
-- `src/submit.js`: accepts `POST /submit`
-- `src/export.js`: serves `GET /export`
-- `src/security.js`: shared API/static headers, CORS, and error helpers
-- `schema.sql`: D1 schema and indexes
-- `wrangler.toml`: Worker, assets, and D1 configuration
+## Privacy and security
 
-## Survey Content
+Survey responses contain only the selected answers, optional comment, and submission timestamp. The application does not attach IP addresses, IP-derived values, or browser user-agent strings to response rows or exports.
 
-The app keeps these survey fields:
+For abuse prevention, `/submit`:
 
-1. Age range
-2. Status
-3. Main monthly pressure
-4. Cost of living increased
-5. What have you cut back on
-6. Work worry rating
-7. Income/allowance keeps up rating
-8. Monthly transport cost band
-9. Monthly food/grocery cost band
-10. Optional comment
+- validates strict field allowlists and a 16 KB request limit;
+- verifies a single-use Turnstile token, hostname, and action server-side;
+- derives an HMAC-SHA-256 network key using `IP_HASH_SECRET`;
+- stores that key only in `submission_throttle`, separately from answers;
+- allows three verified submissions per network per hour and removes throttle rows after 24 hours.
 
-## Local Development Setup
+The browser runs the managed Turnstile widget only when the user submits. Its `interaction-only` appearance remains hidden unless Cloudflare requires a challenge.
 
-### 1. Install dependencies
+`/export` requires `Authorization: Bearer <EXPORT_TOKEN>`, rejects query-string tokens, compares credentials in constant time, streams results in bounded pages, and protects CSV cells from spreadsheet formula execution.
+
+## Local setup
+
+Install dependencies and initialize local D1:
 
 ```bash
 npm install
+npm run db:apply:local
 ```
 
-### 2. Log in to Cloudflare
+Create an ignored `.dev.vars` file:
 
-```bash
-npx wrangler login
+```dotenv
+EXPORT_TOKEN=replace-with-a-long-random-token
+IP_HASH_SECRET=replace-with-a-long-random-secret
+TURNSTILE_SECRET_KEY=replace-with-a-turnstile-test-secret
+TURNSTILE_SITE_KEY=replace-with-a-turnstile-test-site-key
+TURNSTILE_EXPECTED_HOSTNAME=localhost
 ```
 
-### 3. Create the D1 database
+The public production `TURNSTILE_SITE_KEY`, action `survey_submit`, and hostname `surveyapp.ink` are versioned in `wrangler.jsonc`; the matching secret remains in Cloudflare only.
 
-```bash
-npm run db:create
-```
-
-The Worker is configured to use:
-
-- Project name: `survey-app`
-- D1 database name: `25-survey-app-db`
-- D1 binding: `DB`
-- D1 database ID: `eeca209b-e57d-45d7-a29c-ec2ef24e57dc`
-
-### 4. Set local secrets
-
-Create a `.dev.vars` file that is not committed:
-
-```bash
-cat > .dev.vars <<'EOF'
-EXPORT_TOKEN=replace-with-a-local-export-token
-IP_HASH_SECRET=replace-with-a-local-ip-hash-secret
-TURNSTILE_SITE_KEY=replace-with-a-local-turnstile-site-key
-TURNSTILE_SECRET_KEY=replace-with-a-local-turnstile-secret-key
-ALLOWED_ORIGINS=http://localhost:8787,http://127.0.0.1:8787
-EOF
-```
-
-Required secrets:
-
-- `EXPORT_TOKEN`: required to access `/export`
-- `IP_HASH_SECRET`: used to salt the stored IP hash for duplicate prevention and rate limiting
-- `TURNSTILE_SECRET_KEY`: verifies Cloudflare Turnstile responses server-side
-
-Required public variable:
-
-- `TURNSTILE_SITE_KEY`: public Turnstile site key returned by `GET /config` for the browser widget
-
-Optional variable:
-
-- `ALLOWED_ORIGINS` (optional): comma-separated browser origins if you need to allow cross-origin requests beyond same-origin and local development
-
-### 5. Apply the schema
-
-```bash
-npm run db:apply
-```
-
-### 6. Run locally
+Run the app:
 
 ```bash
 npm run dev
 ```
 
-The app runs locally through `wrangler dev` with the Worker entrypoint and static assets.
+## Database changes
 
-## Worker Deployment
-
-This app deploys as a Cloudflare Worker Git deployment with static assets and a D1 binding. It is not a Cloudflare Pages project.
-
-Deploy manually with:
+Apply pending migrations remotely only after taking a private export and checking the row count:
 
 ```bash
-npm run deploy
+npx wrangler d1 export 25-survey-app-db --remote --output /path/outside/repo/survey-backup.sql
+npx wrangler d1 execute 25-survey-app-db --remote --command "SELECT count(*) AS count FROM survey_responses;"
+npm run db:apply
 ```
 
-That runs:
+The migration preserves survey answers while removing the historical `ip_hash`, `user_agent`, and duplicate-fingerprint index.
+
+Synthetic data can be generated without writing anything:
 
 ```bash
-npx wrangler deploy
+npm run seed:synthetic:dry-run
 ```
 
-## Cloudflare Dashboard Build Settings
+`npm run seed:synthetic` writes synthetic answers to the remote database and must never be used as a production launch smoke test.
 
-Use these exact settings in Cloudflare:
+## Tests and validation
 
-- Project type: Worker Git deployment
-- Project name: `survey-app`
-- Build command: empty
-- Deploy command: `npx wrangler deploy`
-- Non-production/version command: `npx wrangler versions upload`
-- Path: `/`
-- API token: `survey-app build token`
+```bash
+npm test
+npm audit
+npx wrangler deploy --dry-run
+git diff --check
+```
 
-### Variables and secrets
+`npm test` runs both Node unit tests and Workers-runtime integration tests against an isolated real D1 database. Coverage includes validation, request size, origin checks, Turnstile hostname/action enforcement, D1 persistence without fingerprints, concurrent throttling, export authorization, streaming, and CSV safety.
 
-Add these secrets:
+## Deployment
 
-- `EXPORT_TOKEN`
-- `IP_HASH_SECRET`
-- `TURNSTILE_SECRET_KEY`
-
-Set them with:
+Set production secrets without putting their values in files or shell history:
 
 ```bash
 npx wrangler secret put EXPORT_TOKEN
@@ -169,154 +100,20 @@ npx wrangler secret put IP_HASH_SECRET
 npx wrangler secret put TURNSTILE_SECRET_KEY
 ```
 
-Set this public variable:
-
-- `TURNSTILE_SITE_KEY`: public Turnstile site key returned by `GET /config`
-
-`TURNSTILE_SITE_KEY` is safe for browsers to see, but do not put it directly in `public/`.
-
-Optional plain variable:
-
-- `ALLOWED_ORIGINS`: comma-separated browser origins if you need cross-origin requests beyond same-origin and local development
-
-### D1 binding
-
-- Binding name: `DB`
-- Database: `25-survey-app-db`
-
-Apply the schema with:
+Deploy the exact reviewed commit:
 
 ```bash
 npm run db:apply
+npm run deploy
 ```
 
-If the D1 binding is missing in the dashboard, add it here:
+Production launch is complete only after:
 
-`Workers & Pages → survey-app → Settings → Bindings → D1 database binding`
+1. `https://surveyapp.ink/config` returns the expected public site key and `survey_submit` action.
+2. HTTP redirects permanently to HTTPS and HTTPS responses include HSTS/CSP headers.
+3. A real browser submission is found in D1 with every expected answer.
+4. That uniquely marked smoke row is deleted and the database count returns to its baseline.
+5. Authorized JSON/CSV export works and does not include throttle data.
+6. Production logs contain event names only, with no answers, tokens, addresses, hashes, or user-agents.
 
-## Required Secrets
-
-Do not hardcode secrets in source files.
-
-- `EXPORT_TOKEN`
-  - Used by `/export`
-  - Send it only in the `Authorization: Bearer ...` header
-- `IP_HASH_SECRET`
-  - Used to salt the duplicate-prevention and rate-limit IP hash
-  - Must be set in every environment where submissions are accepted
-- `TURNSTILE_SECRET_KEY`
-  - Used by `/submit` to verify Cloudflare Turnstile tokens server-side
-  - Must never be sent to the browser
-
-## Required Public Variables
-
-- `TURNSTILE_SITE_KEY`
-  - Public Turnstile site key for the browser widget
-  - Served by the Worker from `GET /config`
-
-## Optional Variables
-
-- `ALLOWED_ORIGINS`
-  - Optional allowlist for browser CORS
-  - Format: comma-separated origins such as `https://example.com,https://admin.example.com`
-
-## Security and Privacy
-
-- No names, phone numbers, emails, exact addresses, or ID numbers are collected
-- Raw IP addresses are never stored; only a salted hash is kept for duplicate and spam protection
-- `/export` requires the `EXPORT_TOKEN` secret and does not expose data publicly
-- `/export` rejects query-string tokens and requires a bearer token header
-- `/submit` verifies Turnstile server-side before saving a response
-- `/submit` rate limits by salted IP hash only; raw IP addresses are never stored
-- D1 queries use prepared statements only
-- Survey data should only be reported in grouped, anonymous form
-- Comments are stored as plain text and are never rendered as HTML
-
-## Export Endpoint Usage
-
-Route:
-
-```text
-GET /export
-```
-
-Use an Authorization header. Do not put `EXPORT_TOKEN` in a query string.
-
-```bash
-curl -H "Authorization: Bearer $EXPORT_TOKEN" \
-  "http://localhost:8787/export?format=json"
-
-mkdir -p exports
-curl -H "Authorization: Bearer $EXPORT_TOKEN" \
-  "http://localhost:8787/export?format=csv" \
-  -o exports/survey-export.csv
-```
-
-Query parameters:
-
-- `format`: `json` or `csv`, default `json`
-- `start`: optional `YYYY-MM-DD`
-- `end`: optional `YYYY-MM-DD`
-
-The export only includes survey response fields and excludes internal duplicate-prevention data. CSV cells are escaped for spreadsheet use, including prefixing formula-leading values such as `=`, `+`, `-`, and `@`.
-
-## Testing `/submit` Locally
-
-Turnstile requires a valid browser-issued token for normal submits. For manual browser testing:
-
-1. Set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` in `.dev.vars`.
-2. Run `npm run db:apply:local`.
-3. Run `npm run dev`.
-4. Open `http://localhost:8787`, complete the Turnstile widget, and submit the form.
-
-For API-level invalid payload checks:
-
-```bash
-curl -i -X POST "http://localhost:8787/submit" \
-  -H "Content-Type: application/json" \
-  --data '{"bad":"field"}'
-```
-
-That should return `400` with a generic error.
-
-## Local Test Checklist
-
-Run:
-
-```bash
-npm install
-npm run dev
-```
-
-Then verify:
-
-- Valid survey submit works and redirects to `/success.html`
-- Invalid survey field is rejected with `400`
-- Missing Turnstile token is rejected
-- Repeated submissions from the same requester get `429`
-- `/export` without an `Authorization` header returns `401`
-- `/export` with the wrong bearer token returns `401`
-- `/export` with `Authorization: Bearer $EXPORT_TOKEN` returns JSON or CSV data
-- Query-string token access, such as `/export?token=...`, returns `401`
-- No secrets appear in `public/`, browser devtools, built assets, or committed files
-- Raw IP addresses are not stored in D1; only salted hashes are stored
-
-## Cloudflare Retry Steps
-
-1. Go to `Workers & Pages → survey-app`
-2. Open `Settings`
-3. Open `Builds & deployments`
-4. Confirm:
-   - Build command is empty
-   - Deploy command is `npx wrangler deploy`
-   - Non-production/version command is `npx wrangler versions upload`
-   - Path is `/`
-5. Open `Settings → Variables and Secrets` and confirm:
-   - `EXPORT_TOKEN`
-   - `IP_HASH_SECRET`
-   - `TURNSTILE_SECRET_KEY`
-   - `TURNSTILE_SITE_KEY`
-   - optional `ALLOWED_ORIGINS`
-6. Open `Settings → Bindings` and confirm:
-   - `DB → 25-survey-app-db`
-7. Retry the deployment from the latest Git build in the Cloudflare dashboard
+If rollback is required before public traffic begins, restore the private D1 export and roll back the Worker version together. After real responses begin arriving, prefer a forward fix so new responses are not lost.
