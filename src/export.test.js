@@ -83,6 +83,13 @@ describe("handleExport", () => {
     const body = await res.json();
     assert.equal(body.length, 1);
     assert.deepEqual(body[0].cut_back_on, ["Eating out", "Data"]);
+    assert.equal(res.headers.get("cache-control"), "no-store");
+  });
+
+  it("rejects invalid or reversed date ranges", async () => {
+    const headers = { Authorization: "Bearer export-secret" };
+    assert.equal((await handleExport(makeRequest("/export?start=2026-99-99", headers), makeEnv(ROWS))).status, 400);
+    assert.equal((await handleExport(makeRequest("/export?start=2026-07-22&end=2026-07-01", headers), makeEnv(ROWS))).status, 400);
   });
 
   it("escapes CSV formula-leading cells", async () => {
@@ -93,5 +100,14 @@ describe("handleExport", () => {
     assert.equal(res.status, 200);
     const csv = await res.text();
     assert.match(csv, /"'=IMPORTXML\(""https:\/\/example\.com""\)"/);
+  });
+
+  it("escapes formula cells even when whitespace precedes the formula", async () => {
+    const rows = [{ ...ROWS[0], comment: "\t=2+2" }];
+    const res = await handleExport(
+      makeRequest("/export?format=csv", { Authorization: "Bearer export-secret" }),
+      makeEnv(rows),
+    );
+    assert.match(await res.text(), /'\t=2\+2/);
   });
 });

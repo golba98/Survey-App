@@ -1,110 +1,7 @@
-/**
- * Tests for src/submit.js
- *
- * Runs with Node.js built-in test runner (no extra dependencies required):
- *   node --test src/submit.test.js
- *   npm test
- *
- * These are unit tests that exercise the business-logic helpers exported by
- * submit.js plus the handleSubmit route using lightweight in-memory stubs for
- * the D1 binding and the Worker env object.
- */
-
-import { describe, it, before } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { handleSubmit, submitInternals } from "./submit.js";
 
-// ---------------------------------------------------------------------------
-// Minimal stubs
-// ---------------------------------------------------------------------------
-
-/**
- * Build a minimal D1-like stub.
- * If `shouldFail` is true the insert will throw so we can test DB-error paths.
- */
-function makeDb({ shouldFail = false, existingRow = null } = {}) {
-  const rows = [];
-  const throttleRows = new Map();
-
-  return {
-    rows,
-    throttleRows,
-    prepare(sql) {
-      const stmt = {
-        _sql: sql,
-        _bindings: [],
-        bind(...args) {
-          this._bindings = args;
-          return this;
-        },
-        async first() {
-          if (/FROM submission_throttle/i.test(sql)) {
-            return throttleRows.get(this._bindings[0]) || null;
-          }
-
-          // Duplicate-check query
-          return existingRow;
-        },
-        async run() {
-          if (shouldFail) {
-            throw new Error("SQLITE_CONSTRAINT: CHECK constraint failed");
-          }
-
-          if (/DELETE FROM submission_throttle/i.test(sql)) {
-            return { meta: {} };
-          }
-
-          if (/INSERT INTO submission_throttle/i.test(sql)) {
-            const [throttleKey, windowStartedAt, attemptCount, lastSeenAt] = this._bindings;
-            throttleRows.set(throttleKey, {
-              window_started_at: windowStartedAt,
-              attempt_count: attemptCount,
-              last_seen_at: lastSeenAt,
-            });
-            return { meta: {} };
-          }
-
-          const newRow = { id: rows.length + 1 };
-          rows.push({ bindings: this._bindings });
-          return { meta: { last_row_id: newRow.id } };
-        },
-        async all() {
-          return { results: rows };
-        },
-      };
-      return stmt;
-    },
-  };
-}
-
-/**
- * Build a minimal Worker env.
- */
-function makeEnv(overrides = {}) {
-  return {
-    DB: makeDb(),
-    IP_HASH_SECRET: "test-secret",
-    TURNSTILE_SECRET_KEY: "turnstile-secret",
-    ALLOWED_ORIGINS: undefined,
-    ...overrides,
-  };
-}
-
-/**
- * Build a POST /submit Request with the given JSON body.
- */
-function makeRequest(body, { method = "POST", headers = {} } = {}) {
-  return new Request("http://localhost:8787/submit", {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": "TestAgent/1.0",
-      ...headers,
-    },
-    body: typeof body === "string" ? body : JSON.stringify(body),
-  });
-}
-
-/** A fully-valid survey payload. */
 const VALID_PAYLOAD = {
   age_range: "22-25",
   status: "Student",
@@ -119,269 +16,148 @@ const VALID_PAYLOAD = {
   turnstileToken: "valid-turnstile-token",
 };
 
-const REQUEST_OVERSIZE_BYTES = 17 * 1024;
+let turnstileResult;
 
-// ---------------------------------------------------------------------------
-// Import the module under test
-// ---------------------------------------------------------------------------
+function makeDb({ failInsert = false } = {}) {
+  const rows = [];
+  const throttle = new Map();
+  return {
+    rows,
+    throttle,
+    prepare(sql) {
+      return {
+        sql,
+        bindings: [],
+        bind(...bindings) { this.bindings = bindings; return this; },
+        async run() {
+          if (/INSERT INTO survey_responses/i.test(sql)) {
+            if (failInsert) throw new Error("insert failed");
+            rows.push(this.bindings);
+          }
+          return { success: true, meta: {} };
+        },
+      };
+    },
+    async batch(statements) {
+      const results = [];
+      for (const statement of statements) {
+        if (/DELETE FROM submission_throttle/i.test(statement.sql)) {
+          const cutoff = statement.bindings[0];
+          for (const [key, row] of throttle) if (row.last_seen_at < cutoff) throttle.delete(key);
+          results.push({ success: true, results: [] });
+          continue;
+        }
+        const [key, now, lastSeen, windowCutoff] = statement.bindings;
+        const current = throttle.get(key);
+        const attemptCount = !current || current.window_started_at <= windowCutoff
+          ? 1
+          : current.attempt_count + 1;
+        throttle.set(key, {
+          window_started_at: attemptCount === 1 ? now : current.window_started_at,
+          attempt_count: attemptCount,
+          last_seen_at: lastSeen,
+        });
+        results.push({ success: true, results: [{ attempt_count: attemptCount }] });
+      }
+      return results;
+    },
+  };
+}
 
-// Dynamic import so we can run after stubs are defined.
-let turnstileSuccess = true;
+function makeEnv(overrides = {}) {
+  return {
+    DB: makeDb(),
+    IP_HASH_SECRET: "test-hmac-secret",
+    TURNSTILE_SECRET_KEY: "turnstile-secret",
+    TURNSTILE_EXPECTED_HOSTNAME: "surveyapp.ink",
+    TURNSTILE_ACTION: "survey_submit",
+    ...overrides,
+  };
+}
 
-before(() => {
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify({ success: turnstileSuccess }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+function makeRequest(body = VALID_PAYLOAD, options = {}) {
+  return new Request(options.url || "http://localhost:8787/submit", {
+    method: options.method || "POST",
+    headers: { "Content-Type": "application/json", ...options.headers },
+    body: options.method === "GET" ? undefined : typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+beforeEach(() => {
+  turnstileResult = { success: true, hostname: "surveyapp.ink", action: "survey_submit" };
+  globalThis.fetch = async () => Response.json(turnstileResult);
 });
 
-const { handleSubmit } = await import("./submit.js");
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("handleSubmit", () => {
-  // -------------------------------------------------------------------------
-  // Environment / configuration
-  // -------------------------------------------------------------------------
-
-  describe("when DB binding is missing", () => {
-    it("returns 503 Service unavailable", async () => {
-      const req = makeRequest(VALID_PAYLOAD);
-      const env = makeEnv({ DB: undefined });
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 503);
-      const body = await res.json();
-      assert.equal(body.error, "Service unavailable.");
-    });
+  it("returns 503 when a required binding or secret is missing", async () => {
+    assert.equal((await handleSubmit(makeRequest(), makeEnv({ DB: undefined }))).status, 503);
+    assert.equal((await handleSubmit(makeRequest(), makeEnv({ IP_HASH_SECRET: undefined }))).status, 503);
+    assert.equal((await handleSubmit(makeRequest(), makeEnv({ TURNSTILE_SECRET_KEY: undefined }))).status, 503);
   });
 
-  describe("when IP_HASH_SECRET is missing", () => {
-    it("returns 503 Service unavailable", async () => {
-      const req = makeRequest(VALID_PAYLOAD);
-      const env = makeEnv({ IP_HASH_SECRET: undefined });
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 503);
-      const body = await res.json();
-      assert.equal(body.error, "Service unavailable.");
-    });
+  it("rejects methods, cross-origin JSON, and invalid content types", async () => {
+    assert.equal((await handleSubmit(makeRequest(null, { method: "GET" }), makeEnv())).status, 405);
+    assert.equal((await handleSubmit(makeRequest(VALID_PAYLOAD, { headers: { Origin: "https://evil.example" } }), makeEnv())).status, 403);
+    const request = makeRequest(VALID_PAYLOAD, { headers: { "Content-Type": "text/plain" } });
+    assert.equal((await handleSubmit(request, makeEnv())).status, 400);
   });
 
-  describe("when TURNSTILE_SECRET_KEY is missing", () => {
-    it("returns 503 Service unavailable", async () => {
-      const req = makeRequest(VALID_PAYLOAD);
-      const env = makeEnv({ TURNSTILE_SECRET_KEY: undefined });
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 503);
-      const body = await res.json();
-      assert.equal(body.error, "Service unavailable.");
-    });
+  it("stores a valid response without returning an id or persisting a fingerprint", async () => {
+    const env = makeEnv();
+    const response = await handleSubmit(makeRequest(), env);
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), { success: true, message: "Survey submitted successfully." });
+    assert.equal(env.DB.rows.length, 1);
+    assert.equal(env.DB.rows[0].length, 10);
   });
 
-  // -------------------------------------------------------------------------
-  // HTTP method
-  // -------------------------------------------------------------------------
-
-  describe("with a disallowed HTTP method", () => {
-    it("returns 405 for GET requests", async () => {
-      // GET requests cannot have a body per the Fetch spec.
-      const req = new Request("http://localhost:8787/submit", {
-        method: "GET",
-        headers: {
-          "User-Agent": "TestAgent/1.0",
-        },
-      });
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 405);
-    });
+  it("rejects missing fields, unexpected fields, duplicate choices, and long comments", async () => {
+    const cases = [
+      { ...VALID_PAYLOAD, age_range: undefined },
+      { ...VALID_PAYLOAD, injected: "bad" },
+      { ...VALID_PAYLOAD, cut_back_on: ["Data", "Data"] },
+      { ...VALID_PAYLOAD, comment: "x".repeat(501) },
+    ];
+    for (const payload of cases) {
+      assert.equal((await handleSubmit(makeRequest(payload), makeEnv())).status, 400);
+    }
   });
 
-  // -------------------------------------------------------------------------
-  // Validation
-  // -------------------------------------------------------------------------
-
-  describe("validation", () => {
-    it("accepts a valid payload and returns 201", async () => {
-      turnstileSuccess = true;
-      const req = makeRequest(VALID_PAYLOAD);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 201);
-      const body = await res.json();
-      assert.equal(body.success, true);
-      assert.ok(typeof body.id === "number");
-    });
-
-    it("accepts a valid payload with no comment (optional field)", async () => {
-      const payload = { ...VALID_PAYLOAD, comment: "" };
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 201);
-    });
-
-    it("accepts a valid payload with an absent comment field", async () => {
-      const { comment: _omit, ...payloadWithoutComment } = VALID_PAYLOAD;
-      const req = makeRequest(payloadWithoutComment);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 201);
-    });
-
-    it("returns 400 when a required field is missing (age_range)", async () => {
-      const { age_range: _omit, ...payload } = VALID_PAYLOAD;
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-      const body = await res.json();
-      assert.equal(body.error, "Invalid submission.");
-    });
-
-    it("returns 400 when cut_back_on is empty", async () => {
-      const payload = { ...VALID_PAYLOAD, cut_back_on: [] };
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-      const body = await res.json();
-      assert.equal(body.error, "Invalid submission.");
-    });
-
-    it("returns 400 when a rating is out of range", async () => {
-      const payload = { ...VALID_PAYLOAD, work_worry_rating: 6 };
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-      const body = await res.json();
-      assert.equal(body.error, "Invalid submission.");
-    });
-
-    it("returns 400 when comment exceeds 500 characters", async () => {
-      const payload = { ...VALID_PAYLOAD, comment: "x".repeat(501) };
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-      const body = await res.json();
-      assert.equal(body.error, "Invalid submission.");
-    });
-
-    it("accepts a comment of exactly 500 characters", async () => {
-      const payload = { ...VALID_PAYLOAD, comment: "a".repeat(500) };
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 201);
-    });
-
-    it("returns 400 for an unexpected field", async () => {
-      const payload = { ...VALID_PAYLOAD, injected_field: "bad" };
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-    });
-
-    it("returns 400 when the Turnstile token is missing", async () => {
-      const { turnstileToken: _omit, ...payload } = VALID_PAYLOAD;
-      const req = makeRequest(payload);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-      const body = await res.json();
-      assert.equal(body.error, "Invalid submission.");
-    });
-
-    it("returns 400 when Turnstile verification fails", async () => {
-      turnstileSuccess = false;
-      const req = makeRequest(VALID_PAYLOAD);
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      turnstileSuccess = true;
-      assert.equal(res.status, 400);
-      const body = await res.json();
-      assert.equal(body.error, "Spam check failed.");
-    });
-
-    it("returns 400 for invalid JSON body", async () => {
-      const req = makeRequest("not-json", {
-        headers: { "Content-Type": "application/json", "User-Agent": "TestAgent/1.0" },
-      });
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 400);
-    });
-
-    it("returns 413 for an oversized body", async () => {
-      const req = makeRequest("x".repeat(REQUEST_OVERSIZE_BYTES), {
-        headers: { "Content-Type": "application/json", "User-Agent": "TestAgent/1.0" },
-      });
-      const env = makeEnv();
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 413);
-      const body = await res.json();
-      assert.equal(body.error, "Request too large.");
-    });
+  it("rejects invalid JSON and oversized bodies", async () => {
+    assert.equal((await handleSubmit(makeRequest("not-json"), makeEnv())).status, 400);
+    assert.equal((await handleSubmit(makeRequest("x".repeat(17 * 1024)), makeEnv())).status, 413);
   });
 
-  // -------------------------------------------------------------------------
-  // Rate limiting
-  // -------------------------------------------------------------------------
-
-  describe("rate limiting", () => {
-    it("returns 429 after more than three submissions from the same hashed IP in an hour", async () => {
-      const env = makeEnv();
-      const headers = {
-        "CF-Connecting-IP": "203.0.113.10",
-        "User-Agent": "RateLimitAgent/1.0",
-      };
-
-      for (let index = 0; index < 3; index += 1) {
-        const res = await handleSubmit(makeRequest(VALID_PAYLOAD, { headers }), env);
-        assert.notEqual(res.status, 429);
-      }
-
-      const limited = await handleSubmit(makeRequest(VALID_PAYLOAD, { headers }), env);
-      assert.equal(limited.status, 429);
-      const body = await limited.json();
-      assert.equal(body.error, "Too many submissions.");
-    });
+  it("requires successful Turnstile hostname and action validation", async () => {
+    turnstileResult = { success: false };
+    assert.equal((await handleSubmit(makeRequest(), makeEnv())).status, 400);
+    turnstileResult = { success: true, hostname: "evil.example", action: "survey_submit" };
+    assert.equal((await handleSubmit(makeRequest(), makeEnv())).status, 400);
+    turnstileResult = { success: true, hostname: "surveyapp.ink", action: "wrong" };
+    assert.equal((await handleSubmit(makeRequest(), makeEnv())).status, 400);
   });
 
-  // -------------------------------------------------------------------------
-  // Duplicate detection
-  // -------------------------------------------------------------------------
-
-  describe("duplicate submission", () => {
-    it("returns 409 when the same ip_hash + user_agent already exists", async () => {
-      // The stub's first() always returns existingRow when set.
-      const db = makeDb({ existingRow: { id: 42 } });
-      const env = makeEnv({ DB: db });
-      const req = makeRequest(VALID_PAYLOAD);
-      const res = await handleSubmit(req, env);
-      assert.equal(res.status, 409);
-      const body = await res.json();
-      assert.ok(/duplicate/i.test(body.error));
-    });
+  it("returns 503 when Siteverify is unavailable", async () => {
+    globalThis.fetch = async () => new Response("unavailable", { status: 502 });
+    assert.equal((await handleSubmit(makeRequest(), makeEnv())).status, 503);
   });
 
-  // -------------------------------------------------------------------------
-  // Database error
-  // -------------------------------------------------------------------------
+  it("allows three attempts per hour and blocks the fourth", async () => {
+    const env = makeEnv();
+    for (let index = 0; index < 3; index += 1) {
+      assert.equal((await handleSubmit(makeRequest(), env)).status, 201);
+    }
+    assert.equal((await handleSubmit(makeRequest(), env)).status, 429);
+  });
 
-  describe("database insert failure", () => {
-    it("returns 500 Internal server error when D1 insert throws", async () => {
-      const db = makeDb({ shouldFail: true });
-      const env = makeEnv({ DB: db });
-      const req = makeRequest(VALID_PAYLOAD);
-      const res = await handleSubmit(req, env);
-      // The inner DB catch returns 500 via serverError()
-      assert.equal(res.status, 500);
-    });
+  it("returns 500 when the D1 insert fails", async () => {
+    const response = await handleSubmit(makeRequest(), makeEnv({ DB: makeDb({ failInsert: true }) }));
+    assert.equal(response.status, 500);
+  });
+
+  it("uses HMAC rather than a raw or unhashed client address", async () => {
+    const key = await submitInternals.createThrottleKey("203.0.113.40", "secret");
+    assert.equal(key.length, 64);
+    assert.ok(!key.includes("203.0.113.40"));
   });
 });

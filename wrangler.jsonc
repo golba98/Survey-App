@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "survey-app",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAD7Ge_r_KK6DSqCa",
+    "TURNSTILE_ACTION": "survey_submit",
+    "TURNSTILE_EXPECTED_HOSTNAME": "surveyapp.ink"
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "25-survey-app-db",
+      "database_id": "eeca209b-e57d-45d7-a29c-ec2ef24e57dc",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}

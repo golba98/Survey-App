@@ -1,5 +1,5 @@
--- Canonical schema for new local/dev databases.
-CREATE TABLE IF NOT EXISTS survey_responses (
+-- Remove response-linked network/browser fingerprints while preserving survey data.
+CREATE TABLE survey_responses_private (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     age_range TEXT NOT NULL CHECK (age_range IN ('18-21', '22-25', '26-30', '31+')),
@@ -14,14 +14,19 @@ CREATE TABLE IF NOT EXISTS survey_responses (
     comment TEXT CHECK (comment IS NULL OR length(comment) <= 500)
 );
 
-CREATE INDEX IF NOT EXISTS idx_survey_responses_timestamp ON survey_responses(timestamp);
+INSERT INTO survey_responses_private (
+    id, timestamp, age_range, status, main_pressure, cost_increased, cut_back_on,
+    work_worry_rating, income_keeps_up_rating, transport_cost, food_cost, comment
+)
+SELECT
+    id, timestamp, age_range, status, main_pressure, cost_increased, cut_back_on,
+    work_worry_rating, income_keeps_up_rating, transport_cost, food_cost, comment
+FROM survey_responses;
 
-CREATE TABLE IF NOT EXISTS submission_throttle (
-    throttle_key TEXT PRIMARY KEY,
-    window_started_at INTEGER NOT NULL,
-    attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
-    last_seen_at INTEGER NOT NULL
-);
-
+DROP INDEX IF EXISTS idx_survey_responses_duplicate_guard;
+DROP INDEX IF EXISTS idx_survey_responses_timestamp;
+DROP TABLE survey_responses;
+ALTER TABLE survey_responses_private RENAME TO survey_responses;
+CREATE INDEX idx_survey_responses_timestamp ON survey_responses(timestamp);
 CREATE INDEX IF NOT EXISTS idx_submission_throttle_last_seen
     ON submission_throttle(last_seen_at);

@@ -43,8 +43,8 @@
                         cost of living, work pressure, and daily economic pressures.
                     </p>
                     <p>
-                        <strong>Your responses will only be used in grouped, anonymous form for data analysis.</strong>
-                        No personally identifying information is collected.
+                        <strong>Your responses will only be used in grouped form for data analysis.</strong>
+                        The survey does not ask for direct identifiers.
                     </p>
                     <p class="time-estimate">Estimated time: 3-5 minutes</p>
                 </section>
@@ -53,11 +53,15 @@
                 <section class="privacy-card card survey-section">
                     <h2>Privacy Notice</h2>
                     <p>
-                        <strong>This survey is completely anonymous.</strong> Do not enter your name, phone number,
+                        <strong>This survey does not store your IP address or browser details with your answers.</strong>
+                        Do not enter your name, phone number,
                         ID number, exact address, email, or any private identifying information.
                     </p>
                     <p>
-                        Responses will only be used for a student data visualisation project and shown in grouped form.
+                        Responses store your choices, optional comment, and submission time. For abuse prevention,
+                        a keyed one-way network identifier is kept separately for no more than 24 hours, and
+                        Cloudflare Turnstile processes security traffic. Responses will only be used for a student
+                        data visualisation project and shown in grouped form.
                     </p>
                 </section>
 
@@ -404,7 +408,7 @@
                     </p>
                     
                     <!-- General form error -->
-                    <div class="error-message general-error" id="form-error" role="alert"></div>
+                    <div class="error-message general-error" id="form-error" role="alert" aria-live="polite"></div>
 
                     <div id="turnstile-widget" class="turnstile-widget"></div>
                     

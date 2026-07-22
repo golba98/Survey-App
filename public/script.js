@@ -1,14 +1,6 @@
-/**
- * South African Economy Survey - Frontend JavaScript
- * Handles form validation, submission, and client-side logic
- */
-
-(function() {
+(function () {
     'use strict';
 
-    // ========================================
-    // DOM Elements
-    // ========================================
     const form = document.getElementById('survey-form');
     const submitButton = document.getElementById('submit-button');
     const formError = document.getElementById('form-error');
@@ -16,457 +8,221 @@
     const charCount = document.getElementById('char-count');
     const turnstileContainer = document.getElementById('turnstile-widget');
 
-    // Storage key for duplicate prevention
     const STORAGE_KEY = 'survey_submitted_sa_economy';
-
-    // Worker API endpoint
-    const API_SUBMIT_URL = '/submit';
-    const API_CONFIG_URL = '/config';
     const COMMENT_MAX_LENGTH = 500;
+    const REQUIRED_RADIO_GROUPS = [
+        'age_range', 'status', 'main_pressure', 'cost_increased',
+        'work_worry_rating', 'income_keeps_up_rating', 'transport_cost', 'food_cost'
+    ];
+
     let turnstileWidgetId = null;
-    let turnstileToken = null;
-    let turnstileReady = false;
+    let turnstileConfig = null;
+    let pendingChallenge = null;
 
-    // ========================================
-    // Initialize
-    // ========================================
     function init() {
-        if (!form) {
-            console.error('Survey form not found');
-            return;
-        }
+        if (!form) return;
 
-        // Check if already submitted (client-side duplicate prevention)
         if (localStorage.getItem(STORAGE_KEY)) {
             showAlreadySubmitted();
             return;
         }
 
-        // Character counter for comment
-        if (commentTextarea && charCount) {
-            commentTextarea.addEventListener('input', updateCharCount);
-            updateCharCount();
-        }
-
-        // Form validation on blur
-        setupValidationOnBlur();
-
-        // Form submission
+        commentTextarea?.addEventListener('input', updateCharCount);
+        updateCharCount();
+        setupValidation();
         form.addEventListener('submit', handleSubmit);
-
-        // Real-time validation feedback
-        setupRealTimeValidation();
-
-        // Turnstile anti-spam widget
-        initializeTurnstile();
     }
 
-    // ========================================
-    // Character Counter
-    // ========================================
     function updateCharCount() {
         if (!commentTextarea || !charCount) return;
-        const count = commentTextarea.value.length;
-        const max = commentTextarea.maxLength || COMMENT_MAX_LENGTH;
-        charCount.textContent = `${count} / ${max} characters`;
+        charCount.textContent = `${commentTextarea.value.length} / ${COMMENT_MAX_LENGTH} characters`;
     }
 
-    // ========================================
-    // Validation Setup
-    // ========================================
-    function setupValidationOnBlur() {
-        const requiredFields = form.querySelectorAll('[required]:not([type="checkbox"])');
-        requiredFields.forEach(field => {
-            field.addEventListener('blur', () => validateField(field));
-        });
-
-        // For checkboxes (question 5)
-        const checkboxes = form.querySelectorAll('input[name="cut_back_on"]');
-        if (checkboxes.length > 0) {
-            checkboxes.forEach(cb => {
-                cb.addEventListener('change', validateCheckboxGroup);
+    function setupValidation() {
+        for (const name of REQUIRED_RADIO_GROUPS) {
+            form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+                input.addEventListener('change', () => setFieldError(name, ''));
             });
         }
-    }
-
-    function setupRealTimeValidation() {
-        // Add input event listeners for immediate feedback
-        const radioGroups = ['age_range', 'status', 'main_pressure', 'cost_increased', 
-                            'work_worry_rating', 'income_keeps_up_rating', 'transport_cost', 'food_cost'];
-        
-        radioGroups.forEach(name => {
-            const radios = form.querySelectorAll(`input[name="${name}"]`);
-            radios.forEach(radio => {
-                radio.addEventListener('change', () => validateField(radios[0]));
-            });
+        form.querySelectorAll('input[name="cut_back_on"]').forEach((input) => {
+            input.addEventListener('change', () => setFieldError('cut_back_on', ''));
         });
     }
 
-    // ========================================
-    // Field Validation
-    // ========================================
-    function validateField(field) {
-        const fieldName = field.name;
-        const errorElement = document.getElementById(`error-${fieldName}`);
-        
-        if (!errorElement) return true;
-
-        // Get the actual value based on field type
-        let value;
-        if (field.type === 'radio') {
-            value = form.querySelector(`input[name="${fieldName}"]:checked`)?.value;
-        } else {
-            value = field.value;
-        }
-
-        // Check required
-        if (field.required && !value) {
-            errorElement.textContent = 'This field is required';
-            return false;
-        }
-
-        // Clear error if valid
-        errorElement.textContent = '';
-        return true;
-    }
-
-    function validateCheckboxGroup() {
-        const checkboxes = form.querySelectorAll('input[name="cut_back_on"]:checked');
-        const errorElement = document.getElementById('error-cut_back_on');
-        
-        if (!errorElement) return true;
-
-        if (checkboxes.length === 0) {
-            errorElement.textContent = 'Please select at least one option';
-            return false;
-        }
-
-        errorElement.textContent = '';
-        return true;
-    }
-
-    // ========================================
-    // Form Validation
-    // ========================================
     function validateForm() {
-        let isValid = true;
-        const firstInvalidField = null;
+        let firstInvalid = null;
 
-        // Validate all required fields
-        const requiredFields = [
-            'age_range', 'status', 'main_pressure', 'cost_increased',
-            'work_worry_rating', 'income_keeps_up_rating', 'transport_cost', 'food_cost'
-        ];
-
-        requiredFields.forEach(fieldName => {
-            const field = form.querySelector(`input[name="${fieldName}"]:checked`);
-            const errorElement = document.getElementById(`error-${fieldName}`);
-            
-            if (!field && errorElement) {
-                errorElement.textContent = 'This field is required';
-                isValid = false;
-                if (!firstInvalidField && errorElement) {
-                    scrollToElement(errorElement);
-                }
-            } else if (errorElement) {
-                errorElement.textContent = '';
-            }
-        });
-
-        // Validate checkbox group (question 5)
-        const checkboxes = form.querySelectorAll('input[name="cut_back_on"]:checked');
-        const checkboxError = document.getElementById('error-cut_back_on');
-        if (checkboxes.length === 0) {
-            if (checkboxError) {
-                checkboxError.textContent = 'Please select at least one option';
-                isValid = false;
-                if (!firstInvalidField) {
-                    scrollToElement(checkboxError);
-                }
-            }
-        } else if (checkboxError) {
-            checkboxError.textContent = '';
+        for (const name of REQUIRED_RADIO_GROUPS) {
+            const selected = form.querySelector(`input[name="${name}"]:checked`);
+            setFieldError(name, selected ? '' : 'This field is required');
+            if (!selected && !firstInvalid) firstInvalid = form.querySelector(`input[name="${name}"]`);
         }
 
-        // Validate comment length (optional but has max length)
-        if (commentTextarea && commentTextarea.value.length > COMMENT_MAX_LENGTH) {
-            const commentError = document.getElementById('error-comment');
-            if (commentError) {
-                commentError.textContent = `Comment is too long (max ${COMMENT_MAX_LENGTH} characters)`;
-                isValid = false;
-            }
+        const checkedBoxes = form.querySelectorAll('input[name="cut_back_on"]:checked');
+        setFieldError('cut_back_on', checkedBoxes.length ? '' : 'Please select at least one option');
+        if (!checkedBoxes.length && !firstInvalid) firstInvalid = form.querySelector('input[name="cut_back_on"]');
+
+        const commentTooLong = Boolean(commentTextarea && commentTextarea.value.length > COMMENT_MAX_LENGTH);
+        setFieldError('comment', commentTooLong ? `Comment must be ${COMMENT_MAX_LENGTH} characters or fewer` : '');
+        if (commentTooLong && !firstInvalid) firstInvalid = commentTextarea;
+
+        if (firstInvalid) {
+            firstInvalid.focus();
+            firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showFormError('Please complete all required questions before submitting.');
+            return false;
         }
 
-        // Clear general error if form is valid
-        if (isValid && formError) {
-            formError.textContent = '';
-        }
-
-        if (!turnstileReady || !turnstileToken) {
-            if (formError) {
-                formError.textContent = turnstileReady
-                    ? 'Please complete the anti-spam check before submitting.'
-                    : 'The anti-spam check is still loading. Please try again in a moment.';
-            }
-            isValid = false;
-        }
-
-        return isValid;
+        showFormError('');
+        return true;
     }
 
-    // ========================================
-    // Form Submission
-    // ========================================
-    function handleSubmit(event) {
+    function setFieldError(name, message) {
+        const element = document.getElementById(`error-${name}`);
+        if (element) element.textContent = message;
+    }
+
+    async function handleSubmit(event) {
         event.preventDefault();
-        event.stopPropagation();
+        if (!validateForm() || submitButton?.disabled) return;
 
-        // Validate form
-        if (!validateForm()) {
-            if (formError) {
-                formError.textContent = 'Please complete all required questions before submitting.';
-            }
-            return;
+        setSubmitting(true);
+        try {
+            const turnstileToken = await requestTurnstileToken();
+            const response = await fetch('/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(collectFormData(turnstileToken)),
+                credentials: 'same-origin'
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.success) throw new Error(messageForResponse(response.status, result));
+
+            localStorage.setItem(STORAGE_KEY, 'true');
+            window.location.assign('/success.html');
+        } catch (error) {
+            showFormError(error instanceof Error ? error.message : 'Submission failed. Please try again.');
+            resetTurnstile();
+            setSubmitting(false);
         }
-
-        // Disable submit button
-        setSubmitButtonState(true);
-
-        // Collect form data
-        const formData = collectFormData();
-
-        // Submit to API
-        submitFormData(formData);
     }
 
-    function collectFormData() {
+    function collectFormData(turnstileToken) {
         return {
             age_range: getRadioValue('age_range'),
             status: getRadioValue('status'),
             main_pressure: getRadioValue('main_pressure'),
             cost_increased: getRadioValue('cost_increased'),
-            cut_back_on: getCheckboxValues('cut_back_on'),
+            cut_back_on: Array.from(form.querySelectorAll('input[name="cut_back_on"]:checked'), (input) => input.value),
             work_worry_rating: getRadioValue('work_worry_rating'),
             income_keeps_up_rating: getRadioValue('income_keeps_up_rating'),
             transport_cost: getRadioValue('transport_cost'),
             food_cost: getRadioValue('food_cost'),
-            comment: commentTextarea ? commentTextarea.value.trim() : null,
+            comment: commentTextarea?.value.trim() || null,
             turnstileToken
         };
     }
 
     function getRadioValue(name) {
-        const selected = form.querySelector(`input[name="${name}"]:checked`);
-        return selected ? selected.value : null;
+        return form.querySelector(`input[name="${name}"]:checked`)?.value || null;
     }
 
-    function getCheckboxValues(name) {
-        const checkboxes = form.querySelectorAll(`input[name="${name}"]:checked`);
-        return Array.from(checkboxes).map(cb => cb.value);
+    function messageForResponse(status, result) {
+        if (status === 429) return 'Too many submissions from this network. Please try again later.';
+        if (status === 503) return 'The security check or survey service is temporarily unavailable. Please try again in a few minutes.';
+        if (status === 413) return 'The submission is too large. Please shorten your comment and try again.';
+        return result.error || 'Submission failed. Please check your answers and try again.';
     }
 
-    function submitFormData(data) {
-        // Mark as submitting
-        setSubmitButtonState(true);
+    async function requestTurnstileToken() {
+        await ensureTurnstileWidget();
+        if (pendingChallenge) throw new Error('The security check is already running.');
 
-        // Clear any previous error
-        if (formError) {
-            formError.textContent = '';
+        return new Promise((resolve, reject) => {
+            pendingChallenge = { resolve, reject };
+            try {
+                window.turnstile.execute(turnstileWidgetId);
+            } catch {
+                pendingChallenge = null;
+                reject(new Error('The security check could not start. Please try again.'));
+            }
+        });
+    }
+
+    async function ensureTurnstileWidget() {
+        if (turnstileWidgetId !== null) return;
+        if (!turnstileContainer) throw new Error('The security check is unavailable.');
+
+        const [config] = await Promise.all([loadTurnstileConfig(), waitForTurnstile()]);
+        turnstileConfig = config;
+        turnstileWidgetId = window.turnstile.render(turnstileContainer, {
+            sitekey: config.turnstileSiteKey,
+            action: config.turnstileAction,
+            appearance: 'interaction-only',
+            execution: 'execute',
+            theme: 'dark',
+            callback: (token) => settleChallenge('resolve', token),
+            'expired-callback': () => settleChallenge('reject', new Error('The security check expired. Please try again.')),
+            'timeout-callback': () => settleChallenge('reject', new Error('The security check timed out. Please try again.')),
+            'error-callback': () => settleChallenge('reject', new Error('The security check failed. Please try again.'))
+        });
+    }
+
+    async function loadTurnstileConfig() {
+        if (turnstileConfig) return turnstileConfig;
+        const response = await fetch('/config', { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        if (!response.ok) throw new Error('The security check is temporarily unavailable. Please try again later.');
+        const config = await response.json();
+        if (!config.turnstileSiteKey || !config.turnstileAction) {
+            throw new Error('The security check is not configured.');
         }
-
-        fetch(API_SUBMIT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(data),
-            credentials: 'omit'
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().catch(() => ({})).then(err => {
-                    if (response.status === 503) {
-                        throw new Error(
-                            'The survey service is temporarily unavailable. ' +
-                            'Please try again in a few minutes, or contact support if the problem persists.'
-                        );
-                    }
-
-                    if (response.status === 429) {
-                        throw new Error('Too many submissions. Please try again later.');
-                    }
-
-                    if (response.status === 413) {
-                        throw new Error('The submission is too large. Please shorten your comment and try again.');
-                    }
-
-                    throw new Error(err.error || 'Submission failed. Please check your answers and try again.');
-                });
-            }
-            return response.json();
-        })
-        .then(result => {
-            if (!result.success) {
-                throw new Error(result.message || result.error || 'Submission failed. Please try again.');
-            }
-
-            // Only mark as submitted after the server confirms it was saved.
-            localStorage.setItem(STORAGE_KEY, 'true');
-
-            // Redirect to success page
-            window.location.href = '/success.html';
-        })
-        .catch(error => {
-            console.error('Submission error:', error);
-
-            // Show error message – do NOT clear the form so the user can retry
-            if (formError) {
-                const message = error.message || 'An unexpected error occurred. Please try again.';
-                formError.textContent = message;
-            }
-
-            // Re-enable submit button so the user can try again
-            setSubmitButtonState(false);
-            resetTurnstile();
-        });
-    }
-
-    // ========================================
-    // Turnstile
-    // ========================================
-    function initializeTurnstile() {
-        if (!turnstileContainer) return;
-
-        fetch(API_CONFIG_URL, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            },
-            credentials: 'omit'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Unable to load anti-spam check.');
-            }
-            return response.json();
-        })
-        .then(config => waitForTurnstile().then(() => config))
-        .then(config => {
-            if (!config.turnstileSiteKey) {
-                throw new Error('Anti-spam check is not configured.');
-            }
-
-            turnstileWidgetId = window.turnstile.render(turnstileContainer, {
-                sitekey: config.turnstileSiteKey,
-                callback: token => {
-                    turnstileToken = token;
-                    turnstileReady = true;
-                    if (formError && formError.textContent.includes('anti-spam')) {
-                        formError.textContent = '';
-                    }
-                },
-                'expired-callback': () => {
-                    turnstileToken = null;
-                },
-                'error-callback': () => {
-                    turnstileToken = null;
-                    turnstileReady = true;
-                    if (formError) {
-                        formError.textContent = 'The anti-spam check failed. Please try again.';
-                    }
-                }
-            });
-            turnstileReady = true;
-        })
-        .catch(error => {
-            console.error('Turnstile setup error:', error);
-            turnstileReady = false;
-            if (formError) {
-                formError.textContent = 'The anti-spam check could not load. Please refresh the page.';
-            }
-        });
+        return config;
     }
 
     function waitForTurnstile() {
         return new Promise((resolve, reject) => {
             const startedAt = Date.now();
-
-            function check() {
-                if (window.turnstile && typeof window.turnstile.render === 'function') {
-                    resolve();
-                    return;
-                }
-
-                if (Date.now() - startedAt > 5000) {
-                    reject(new Error('Turnstile script timed out.'));
-                    return;
-                }
-
+            const check = () => {
+                if (window.turnstile?.render) return resolve();
+                if (Date.now() - startedAt >= 7000) return reject(new Error('The security check could not load. Please try again.'));
                 window.setTimeout(check, 100);
-            }
-
+            };
             check();
         });
     }
 
+    function settleChallenge(method, value) {
+        const challenge = pendingChallenge;
+        pendingChallenge = null;
+        challenge?.[method](value);
+    }
+
     function resetTurnstile() {
-        turnstileToken = null;
-        if (window.turnstile && turnstileWidgetId !== null) {
-            window.turnstile.reset(turnstileWidgetId);
-        }
+        pendingChallenge = null;
+        if (window.turnstile && turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
     }
 
-    // ========================================
-    // UI Helpers
-    // ========================================
-    function setSubmitButtonState(isLoading) {
+    function setSubmitting(isSubmitting) {
         if (!submitButton) return;
-        
-        submitButton.disabled = isLoading;
-        submitButton.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+        submitButton.disabled = isSubmitting;
+        submitButton.setAttribute('aria-busy', String(isSubmitting));
     }
 
-    function scrollToElement(element, offset = -20) {
-        if (!element) return;
-        
-        const elementPosition = element.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset + offset;
-        
-        window.scrollTo({
-            top: offsetPosition,
-            behavior: 'smooth'
-        });
-        
-        // Focus the element for accessibility
-        element.focus();
+    function showFormError(message) {
+        if (formError) formError.textContent = message;
     }
 
     function showAlreadySubmitted() {
-        // Show a message that the survey has already been submitted
-        if (form) {
-            form.innerHTML = `
-                <div class="card" style="text-align: center; padding: 2rem;">
-                    <h2 style="color: var(--color-off-white); margin-bottom: 1rem;">
-                        Survey Already Submitted
-                    </h2>
-                    <p style="color: var(--color-off-white-soft); margin-bottom: 1.5rem;">
-                        Thank you! You have already submitted this survey.
-                    </p>
-                    <p style="color: var(--color-off-white-soft);">
-                        Each participant can only submit once to ensure data accuracy.
-                    </p>
-                </div>
-            `;
-        }
+        const card = document.createElement('div');
+        card.className = 'card already-submitted-card';
+        const heading = document.createElement('h2');
+        heading.textContent = 'Survey Already Submitted in This Browser';
+        const message = document.createElement('p');
+        message.textContent = 'Thank you. This browser has already recorded a successful submission.';
+        card.append(heading, message);
+        form.replaceChildren(card);
     }
 
-    // ========================================
-    // Initialize on DOM Ready
-    // ========================================
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-})();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+}());

@@ -5,6 +5,7 @@ node_modules/
 .dev.vars
 *.local
 exports/
+evidence/
 *.csv
 *.db
 *.sqlite

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -149,8 +149,6 @@ function buildRow(index, runId) {
     transport_cost: pickTransportCost(status, index),
     food_cost: pickFoodCost(status, index),
     comment: COMMENTS[index % COMMENTS.length],
-    ip_hash: createHash("sha256").update(`synthetic:${runId}:${index}`).digest("hex"),
-    user_agent: `synthetic-survey-seed/${runId}/${String(index + 1).padStart(3, "0")}`,
   };
 }
 
@@ -233,8 +231,6 @@ function toInsertStatement(row) {
     "transport_cost",
     "food_cost",
     "comment",
-    "ip_hash",
-    "user_agent",
   ];
 
   const values = columns.map((column) => sqlValue(row[column]));
@@ -279,7 +275,7 @@ function printHelp() {
 
 Options:
   --count <number>  Number of rows to generate. Default: ${DEFAULT_COUNT}
-  --run-id <value>  Stable identifier used to create unique synthetic duplicate guards.
+  --run-id <value>  Identifier included in the generated SQL header.
   --apply          Apply the generated SQL to remote Cloudflare D1.
   --help           Show this help text.
 
