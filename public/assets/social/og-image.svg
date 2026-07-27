@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <title>Putting the South African Economy Into Perspective</title>
+  <desc>Social share card for the anonymous South African cost-of-living survey.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#202020"/>
+      <stop offset="55%" stop-color="#171717"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.055"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#f6f3ee" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#f6f3ee" stop-opacity="0.34"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#sheen)"/>
+
+  <!-- Decorative data bars, bottom right -->
+  <g fill="url(#bars)">
+    <rect x="726" y="470" width="34" height="90"/>
+    <rect x="774" y="424" width="34" height="136"/>
+    <rect x="822" y="452" width="34" height="108"/>
+    <rect x="870" y="380" width="34" height="180"/>
+    <rect x="918" y="436" width="34" height="124"/>
+    <rect x="966" y="336" width="34" height="224"/>
+    <rect x="1014" y="404" width="34" height="156"/>
+    <rect x="1062" y="286" width="34" height="274"/>
+  </g>
+  <rect x="726" y="558" width="404" height="2" fill="#f6f3ee" opacity="0.28"/>
+
+  <!-- Brand row -->
+  <g transform="translate(80, 74)">
+    <g transform="scale(0.24)" fill="none" stroke="#f6f3ee" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter">
+      <polygon points="50,40 150,40 180,100 150,160 50,160 20,100"/>
+      <line x1="60" y1="160" x2="60" y2="80"/>
+      <line x1="80" y1="160" x2="80" y2="60"/>
+      <line x1="100" y1="160" x2="100" y2="100"/>
+      <line x1="120" y1="160" x2="120" y2="70"/>
+      <line x1="140" y1="160" x2="140" y2="90"/>
+      <line x1="50" y1="160" x2="150" y2="160"/>
+    </g>
+    <text x="66" y="24" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="21" font-weight="bold"
+          letter-spacing="4.5" fill="#f6f3ee">SA ECONOMY SURVEY</text>
+    <text x="66" y="50" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="19"
+          letter-spacing="1.6" fill="#9c9c9c">Data Visualisation Project</text>
+  </g>
+
+  <!-- Title -->
+  <g font-family="DejaVu Sans, Liberation Sans, sans-serif" font-weight="bold" fill="#ffffff">
+    <text x="80" y="266" font-size="66">Putting the South African</text>
+    <text x="80" y="342" font-size="66">Economy Into Perspective</text>
+  </g>
+
+  <!-- Subtitle -->
+  <text x="80" y="400" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="29" fill="#dddddd">
+    Cost of living, work pressure, and economic strain.
+  </text>
+
+  <!-- Chips -->
+  <g font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="20" font-weight="bold" letter-spacing="2.4">
+    <rect x="80" y="466" width="192" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.22"/>
+    <text x="107" y="499" fill="#f6f3ee">ANONYMOUS</text>
+
+    <rect x="288" y="466" width="196" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.22"/>
+    <text x="316" y="499" fill="#f6f3ee">3–5 MINUTES</text>
+
+    <rect x="500" y="466" width="172" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.22"/>
+    <text x="526" y="499" fill="#f6f3ee">NO SIGN-UP</text>
+  </g>
+
+  <!-- Domain -->
+  <text x="80" y="576" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="24" font-weight="bold"
+        letter-spacing="3" fill="#9c9c9c">SURVEYAPP.INK</text>
+</svg>

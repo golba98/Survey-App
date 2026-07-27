@@ -51,4 +51,22 @@ describe("Worker router security", () => {
     assert.equal(response.headers.get("x-frame-options"), "DENY");
     assert.doesNotMatch(response.headers.get("content-security-policy"), /unsafe-inline/);
   });
+
+  it("keeps documents same-origin but lets social crawlers fetch preview images", async () => {
+    const document = await worker.fetch(new Request("https://surveyapp.ink/"), env());
+    assert.equal(document.headers.get("cross-origin-resource-policy"), "same-origin");
+
+    const image = await worker.fetch(
+      new Request("https://surveyapp.ink/assets/social/og-image.png"),
+      env({
+        ASSETS: {
+          async fetch() {
+            return new Response("png", { headers: { "Content-Type": "image/png" } });
+          },
+        },
+      }),
+    );
+    assert.equal(image.headers.get("cross-origin-resource-policy"), "cross-origin");
+    assert.equal(image.headers.get("x-content-type-options"), "nosniff");
+  });
 });

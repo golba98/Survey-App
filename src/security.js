@@ -70,6 +70,13 @@ export function serviceUnavailable(event, request) {
 
 export function withStaticHeaders(response, request) {
   const headers = responseHeaders(request, "static");
+
+  // Social crawlers and chat clients fetch preview images from their own origin,
+  // so images opt out of the same-origin resource policy the rest of the site uses.
+  if (response.headers.get("Content-Type")?.toLowerCase().startsWith("image/")) {
+    headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  }
+
   for (const [key, value] of response.headers) {
     if (!headers.has(key)) {
       headers.set(key, value);
