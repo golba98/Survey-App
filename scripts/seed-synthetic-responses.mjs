@@ -51,6 +51,7 @@ const PRESSURE_BY_STATUS = {
 const args = parseArgs(process.argv.slice(2));
 const count = parseCount(args.count);
 const mode = args.apply ? "apply" : "dry-run";
+const target = args.local ? "local" : "remote";
 const runId = args["run-id"] || new Date().toISOString().replace(/[:.]/g, "-");
 const sql = buildSeedSql(count, runId);
 
@@ -58,7 +59,7 @@ if (mode === "dry-run") {
   process.stdout.write(sql);
   process.stderr.write(`\nGenerated ${count} synthetic survey row(s). Dry run only; no database changes were made.\n`);
 } else {
-  applySql(sql, count);
+  applySql(sql, count, target);
 }
 
 function parseArgs(argv) {
@@ -69,6 +70,16 @@ function parseArgs(argv) {
 
     if (arg === "--apply") {
       parsed.apply = true;
+      continue;
+    }
+
+    if (arg === "--local") {
+      parsed.local = true;
+      continue;
+    }
+
+    if (arg === "--remote") {
+      parsed.remote = true;
       continue;
     }
 
@@ -249,14 +260,17 @@ function sqlValue(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function applySql(sql, count) {
+function applySql(sql, count, target = "remote") {
   const sqlPath = join(tmpdir(), `survey-synthetic-seed-${randomUUID()}.sql`);
   writeFileSync(sqlPath, sql, "utf8");
+
+  const dbTarget = target === "local" ? "DB" : DATABASE_NAME;
+  const targetFlag = target === "local" ? "--local" : "--remote";
 
   try {
     const result = spawnSync(
       "npx",
-      ["wrangler", "d1", "execute", DATABASE_NAME, "--remote", "--file", sqlPath],
+      ["wrangler", "d1", "execute", dbTarget, targetFlag, "--file", sqlPath],
       { encoding: "utf8", stdio: "inherit" },
     );
 
@@ -264,7 +278,7 @@ function applySql(sql, count) {
       process.exit(result.status ?? 1);
     }
 
-    process.stderr.write(`Inserted ${count} synthetic survey row(s) into ${DATABASE_NAME}.\n`);
+    process.stderr.write(`Inserted ${count} synthetic survey row(s) into ${dbTarget} (${target}).\n`);
   } finally {
     unlinkSync(sqlPath);
   }
@@ -276,7 +290,9 @@ function printHelp() {
 Options:
   --count <number>  Number of rows to generate. Default: ${DEFAULT_COUNT}
   --run-id <value>  Identifier included in the generated SQL header.
-  --apply          Apply the generated SQL to remote Cloudflare D1.
+  --apply          Apply the generated SQL to Cloudflare D1.
+  --local          Apply to local D1 instance (default if omitted is remote when --apply is used).
+  --remote         Apply to remote D1 instance (default).
   --help           Show this help text.
 
 Without --apply, the script prints SQL and makes no database changes.
