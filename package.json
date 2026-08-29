@@ -12,6 +12,7 @@
     "db:apply:local": "wrangler d1 execute DB --local --file=schema.sql",
     "seed:synthetic:dry-run": "node scripts/seed-synthetic-responses.mjs",
     "seed:synthetic": "node scripts/seed-synthetic-responses.mjs --apply",
+    "seed:synthetic:local": "node scripts/seed-synthetic-responses.mjs --apply --local",
     "test": "npm run test:unit && npm run test:worker",
     "test:unit": "node --test src/**/*.test.js",
     "test:worker": "vitest run"
